@@ -187,6 +187,7 @@ const STAGE_COLOR: Record<string, string> = {
   experiments: C.tool,
   writeup: C.ok,
   review: C.warn,
+  improve: C.accent,
   run: C.dim,
   system: C.dim,
 }

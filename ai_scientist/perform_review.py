@@ -384,12 +384,17 @@ Review {i + 1}/{len(reviews)}:
 
 
 def perform_improvement(review, coder):
+    """One review-driven repair round: hand the verdict to the coder, let it
+    revise latex/template.tex. The pipeline recompiles and re-reviews."""
     improvement_prompt = '''The following review has been created for your research paper:
 """
 {review}
 """
 
-Improve the text using the review.'''.format(
-        review=json.dumps(review)
+Improve the text using the review. Revise latex/template.tex to address the
+weaknesses (clarity, missing details, overstated claims, limitations).
+Do not invent new results.'''.format(
+        review=json.dumps(review)[:4000]
     )
     coder_out = coder.run(improvement_prompt)
+    return coder_out

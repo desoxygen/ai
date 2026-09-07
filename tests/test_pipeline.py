@@ -1,5 +1,6 @@
 """Тесты pipeline: стадии, статусы, resume, graceful-прерывание — всё на фейках."""
 import json
+import types
 
 import pytest
 
@@ -157,3 +158,106 @@ def test_run_aborted_is_graceful(runner, monkeypatch, tmp_vault):
     runner.stages = {"ideas"}
     summary = runner.run()
     assert summary["aborted"] is True
+
+
+# ------------------------------------------------------------- improvement loop
+def _prep_review(runner, tmp_path, monkeypatch, scores):
+    """Общая подготовка stage_review: фейковые ревью/правком/компиляция."""
+    import os.path as osp
+    from ai_scientist import perform_writeup as pw
+
+    folder = tmp_path / "20260907_120000_imp_idea"
+    (folder / "latex").mkdir(parents=True)
+    pdf = folder / "imp_idea.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.delenv("AISC_REVIEW_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AISC_REVIEW_MIN_SCORE", raising=False)
+    monkeypatch.delenv("AISC_REVIEW_FIX_ITER", raising=False)
+    monkeypatch.setattr(pl, "load_paper", lambda p: "paper text")
+    it = iter(scores)
+    monkeypatch.setattr(pl, "perform_review",
+                        lambda *a, **kw: {"Overall": next(it)})
+    monkeypatch.setattr(PipelineRunner, "_make_coder", lambda *a, **kw: None)
+    monkeypatch.setattr(pw, "compile_latex", lambda *a, **kw: None)
+    calls = {"improve": 0}
+
+    def fake_improve(review, coder):
+        calls["improve"] += 1
+    monkeypatch.setattr(pl, "perform_improvement", fake_improve)
+    events = []
+    runner.emit = lambda stage, status, message, **kw: events.append((stage, status))
+    idea = {"Name": "imp_idea", "Title": "T", "Experiment": "E"}
+    return idea, str(folder), pdf, calls, events
+
+
+def test_improve_off_by_default(runner, tmp_path, monkeypatch, tmp_vault):
+    idea, folder, _, calls, events = _prep_review(runner, tmp_path, monkeypatch, [3.0])
+    assert runner.stage_review(idea, folder)
+    assert calls["improve"] == 0
+    assert not [e for e in events if e[0] == "improve"]
+
+
+def test_improve_loop_repairs_and_reviews_again(runner, tmp_path, monkeypatch, tmp_vault):
+    idea, folder, pdf, calls, events = _prep_review(
+        runner, tmp_path, monkeypatch, [3.0, 8.0])
+    runner.improvement = True
+    runner.improve_min_score = 6.0
+    runner.improve_rounds = 2
+    assert runner.stage_review(idea, folder)
+    assert calls["improve"] == 1  # второй раунд не нужен: 8 >= 6
+    assert runner._last_review_score["imp_idea"] == 8.0
+    seq = [e for e in events if e[0] == "improve"]
+    assert seq[0] == ("improve", "started") and seq[-1] == ("improve", "done")
+    assert ("review", "done") in events
+
+
+def test_improve_env_legacy_knob_still_works(runner, tmp_path, monkeypatch, tmp_vault):
+    import os
+    idea, folder, _, calls, events = _prep_review(
+        runner, tmp_path, monkeypatch, [4.0, 9.0])
+    monkeypatch.setenv("AISC_REVIEW_FIX_ITER", "1")
+    monkeypatch.setenv("AISC_REVIEW_MIN_SCORE", "6")
+    assert runner.stage_review(idea, folder)
+    assert calls["improve"] == 1
+
+
+def test_improve_failure_closes_started(runner, tmp_path, monkeypatch, tmp_vault):
+    idea, folder, _, calls, events = _prep_review(
+        runner, tmp_path, monkeypatch, [3.0])
+    runner.improvement = True
+    runner.improve_rounds = 1
+
+    def boom(review, coder):
+        raise RuntimeError("aider down")
+    monkeypatch.setattr(pl, "perform_improvement", boom)
+    assert runner.stage_review(idea, folder)
+    seq = [e for e in events if e[0] == "improve"]
+    assert seq[0] == ("improve", "started")
+    assert ("improve", "fail") in seq
+    assert not [e for e in seq if e[1] == "done"]
+
+
+def test_run_module_forwards_improve_options(tmp_path, monkeypatch):
+    from ai_scientist.console.modules.pipeline import run as run_mod
+
+    captured = {}
+
+    class FakeRunner:
+        def __init__(self, template, model, **kw):
+            captured.update(kw)
+
+        def run(self):
+            return {"run_id": "r1", "statuses": {}, "aborted": False}
+
+    monkeypatch.setattr(pl, "PipelineRunner", FakeRunner)
+    (tmp_path / "templates" / "nanoGPT_lite").mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    res = run_mod.run(
+        {"TEMPLATE": "nanoGPT_lite", "MODEL": "m1", "IMPROVE": "on",
+         "IMPROVE_MIN_SCORE": 7, "IMPROVE_ROUNDS": 3},
+        job=types.SimpleNamespace(run_id="r1"), emit=None)
+    assert res["ok"]
+    assert captured["improvement"] is True
+    assert captured["improve_min_score"] == 7.0
+    assert captured["improve_rounds"] == 3

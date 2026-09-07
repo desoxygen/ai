@@ -84,7 +84,30 @@ function realCost(): number {
   return ((realUsage.in + realUsage.out) / 1e6) * PRICE_PER_MTOK
 }
 
-type DlgKind = "palette" | "model" | "theme" | "effect" | "sessions" | "agents" | "history" | "aisjobs" | "projects" | "routers" | "notecolor"
+type DlgKind = "palette" | "model" | "theme" | "effect" | "sessions" | "agents" | "history" | "aisjobs" | "projects" | "routers" | "notecolor" | "improve"
+
+const IMPROVE_PRESETS: { val: string; label: string; desc: string }[] = [
+  { val: "off", label: "off", desc: "review once — no repair rounds" },
+  { val: "on:6:1", label: "quick — min 6, 1 round", desc: "fix the paper once if the review scores below 6/10" },
+  { val: "on:5:2", label: "balanced — min 5, 2 rounds", desc: "up to two fix rounds below 5/10" },
+  { val: "on:7:3", label: "strict — min 7, 3 rounds", desc: "up to three fix rounds below 7/10" },
+]
+
+export function parseImprove(raw: string): string | null {
+  const v = raw.trim().toLowerCase()
+  if (v === "off") return "off"
+  if (v === "on") return "on:6:1"
+  const m = /^(\d+(?:\.\d+)?):(\d+)$/.exec(v)
+  if (m) return `on:${m[1]}:${m[2]}`
+  const m3 = /^(\d+(?:\.\d+)?)\s+(\d+)$/.exec(v)
+  if (m3) return `on:${m3[1]}:${m3[2]}`
+  return null
+}
+
+export function improveLabel(cfg: string): string {
+  const m = /^on:(\d+(?:\.\d+)?):(\d+)$/.exec(cfg)
+  return m ? `on · ≥${m[1]} ×${m[2]}` : "off"
+}
 
 interface NewProjectState {
   step: "name" | "desc" | "idea" | "system" | "confirm"
@@ -1616,10 +1639,12 @@ export function App() {
   )
 
   const doRun = useCallback(
-    async (template: string, model?: string) => {
+    async (template: string, model?: string, improve?: string) => {
       const prevMax = store.jobs.reduce((m, j) => Math.max(m, j.id), 0)
-      const h = startAisRun({ template, model: model ? pipelineModel(model) : undefined })
-      pushStatic(`Launching pipeline: aiscientist run --template ${template}\n`, "run")
+      const improveCfg = improve ?? settings.improve ?? "off"
+      const h = startAisRun({ template, model: model ? pipelineModel(model) : undefined, improve: improveCfg })
+      const tail = /^on:/.test(improveCfg) ? ` --improve (${improveLabel(improveCfg)})` : ""
+      pushStatic(`Launching pipeline: aiscientist run --template ${template}${tail}\n`, "run")
       h.child.on("error", (e) => showToast(`spawn failed: ${String((e as Error).message ?? e)} — set $AISC_PYTHON`, "err"))
       const jid = await waitJobId(prevMax)
       if (jid === -1) {
@@ -1705,14 +1730,35 @@ export function App() {
         case "run": {
           const tpls = listTemplates()
           if (!args.length) {
-            pushStatic(`usage: /run <template> [--model m] — templates: ${tpls.join(", ")}\n`, "help")
+            pushStatic(`usage: /run <template> [--model m] [--improve [min:rounds]] — templates: ${tpls.join(", ")}\n`, "help")
             return true
           }
           if (!tpls.includes(args[0])) {
             pushStatic(`Unknown template "${args[0]}" — available: ${tpls.join(", ")}\n`, "error")
             return true
           }
-          void doRun(args[0], args.includes("--model") ? args[args.indexOf("--model") + 1] : undefined)
+          let improveForRun: string | undefined
+          const impIdx = args.indexOf("--improve")
+          if (impIdx >= 0) {
+            const nxt = args[impIdx + 1]
+            improveForRun = nxt && !nxt.startsWith("--") ? parseImprove(nxt) ?? "on:6:1" : "on:6:1"
+          }
+          void doRun(args[0], args.includes("--model") ? args[args.indexOf("--model") + 1] : undefined, improveForRun)
+          return true
+        }
+        case "improve": {
+          const val = args.join(" ")
+          if (!val) {
+            open("improve", 0)
+            return true
+          }
+          const parsed = parseImprove(val)
+          if (!parsed) {
+            pushStatic("usage: /improve off | on | <min>:<rounds>  (e.g. /improve 6:1) — no arg opens the picker\n", "error")
+            return true
+          }
+          patchSettings({ improve: parsed })
+          showToast(`auto-improve: ${improveLabel(parsed)}`, "ok")
           return true
         }
         case "report": {
@@ -1736,7 +1782,7 @@ export function App() {
             "",
             "## Stages",
             "",
-            ...["ideas", "novelty", "experiments", "writeup", "review"].map((s) => `- ${s}: ${sm.get(s) ?? "pending"}`),
+            ...["ideas", "novelty", "experiments", "writeup", "review", "improve"].map((s) => `- ${s}: ${sm.get(s) ?? "pending"}`),
             "",
             "## Last events",
             "",
@@ -2131,6 +2177,18 @@ export function App() {
             run: () => selectProject(t),
           }
         })
+      if (kind === "improve")
+        return IMPROVE_PRESETS.map((p) => ({
+          name: p.label,
+          desc: p.desc,
+          category: "Auto-improve",
+          prefix: settings.improve === p.val ? "●" : undefined,
+          hint: settings.improve === p.val ? "active" : undefined,
+          run: () => {
+            patchSettings({ improve: p.val })
+            showToast(`auto-improve: ${improveLabel(p.val)}`, "ok")
+          },
+        }))
       if (kind === "notecolor")
         return LABELS.map((l) => ({
           name: l.name,
@@ -2282,6 +2340,9 @@ export function App() {
           break
         case "routers":
           openDialog("routers", 0)
+          break
+        case "improve":
+          openDialog("improve", 0)
           break
         case "agentboard":
           setWs("agents")
@@ -2980,6 +3041,8 @@ export function App() {
       setStarted(true)
       startedRef.current = true
     },
+    improveLabel: improveLabel(settings.improve),
+    onPickImprove: () => openDialog("improve", 0),
     workers: orchState.workers,
     now,
     animations: anim,
@@ -3000,6 +3063,7 @@ export function App() {
     projects: "Select project",
     routers: "Select LLM router",
     notecolor: "Note color",
+    improve: "Auto-improve papers",
   }
 
   if (size.w < 58 || size.h < 12) {

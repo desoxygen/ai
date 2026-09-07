@@ -27,6 +27,10 @@ MANIFEST = {
                    "default": "ideas,novelty,experiments,writeup,review"},
         "ENGINE": {"required": False, "type": "choice",
                    "choices": ["semanticscholar", "openalex"], "default": "semanticscholar"},
+        "IMPROVE": {"required": False, "type": "choice",
+                    "choices": ["on", "off"], "default": "off"},
+        "IMPROVE_MIN_SCORE": {"required": False, "type": "int", "default": 6},
+        "IMPROVE_ROUNDS": {"required": False, "type": "int", "default": 1},
     },
 }
 
@@ -71,12 +75,17 @@ def run(options, job, emit, stop_event=None):
     num_reflections = int(options.get("NUM_REFLECTIONS") or 3)
     engine = options.get("ENGINE") or "semanticscholar"
     idea_filter = (options.get("IDEA") or "").strip()
+    improvement = str(options.get("IMPROVE") or "off").lower() in ("on", "true", "1", "yes")
+    improve_min_score = float(options.get("IMPROVE_MIN_SCORE") or 6)
+    improve_rounds = int(options.get("IMPROVE_ROUNDS") or 1)
 
     runner = PipelineRunner(
         template, model,
         num_ideas=num_ideas, num_reflections=num_reflections,
         engine=engine, stages=stages, run_id=job.run_id,
         emit=emit, stop_event=stop_event, idea_filter=idea_filter,
+        improvement=improvement,
+        improve_min_score=improve_min_score, improve_rounds=improve_rounds,
     )
     summary = runner.run()
     ok = (not summary.get("aborted")) and (not _has_failed(summary))

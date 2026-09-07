@@ -75,6 +75,12 @@ def cli_run(argv):
     p.add_argument("--stages", default="ideas,novelty,experiments,writeup,review")
     p.add_argument("--engine", default="semanticscholar",
                    choices=["semanticscholar", "openalex"])
+    p.add_argument("--improve", action="store_true",
+                   help="revise the paper from reviewer feedback and re-review")
+    p.add_argument("--min-score", type=float, default=6.0,
+                   help="improve only when review score is below this (0-10)")
+    p.add_argument("--rounds", type=int, default=1,
+                   help="max improvement rounds")
     a = p.parse_args(argv)
 
     mod = ModuleRegistry().get("pipeline/run")
@@ -86,6 +92,8 @@ def cli_run(argv):
         "TEMPLATE": a.template, "MODEL": a.model, "IDEA": a.idea,
         "NUM_IDEAS": a.num_ideas, "NUM_REFLECTIONS": a.num_reflections,
         "STAGES": a.stages, "ENGINE": a.engine,
+        "IMPROVE": "on" if a.improve else "off",
+        "IMPROVE_MIN_SCORE": a.min_score, "IMPROVE_ROUNDS": a.rounds,
     }
     jobs = JobRegistry()
     return execute_job(mod, options, jobs, printer=_print_event)

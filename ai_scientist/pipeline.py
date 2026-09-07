@@ -22,7 +22,7 @@ from ai_scientist.generate_ideas import generate_ideas, check_idea_novelty
 from ai_scientist.llm import create_client
 from ai_scientist.perform_experiments import perform_experiments
 from ai_scientist.perform_writeup import perform_writeup
-from ai_scientist.perform_review import perform_review, load_paper
+from ai_scientist.perform_review import perform_review, perform_improvement, load_paper
 from ai_scientist.research_quality import (
     append_learning, idea_budget_deadline, write_run_meta,
 )
@@ -51,7 +51,8 @@ class PipelineRunner:
     def __init__(self, template: str, model: str, num_ideas: int = 5,
                  num_reflections: int = 3, engine: str = "semanticscholar",
                  improvement: bool = False, stages=None, run_id: str = "",
-                 emit=None, stop_event=None, idea_filter: str = ""):
+                 emit=None, stop_event=None, idea_filter: str = "",
+                 improve_min_score: float = 6.0, improve_rounds: int = 1):
         self.template = template
         self.base_dir = osp.join("templates", template)
         self.results_dir = osp.join("results", template)
@@ -60,6 +61,10 @@ class PipelineRunner:
         self.num_reflections = num_reflections
         self.engine = engine
         self.improvement = improvement
+        # review→improve→re-review loop parameters (active when improvement=True;
+        # legacy AISC_REVIEW_MIN_SCORE/AISC_REVIEW_FIX_ITER env still honoured).
+        self.improve_min_score = improve_min_score
+        self.improve_rounds = improve_rounds
         self.stages = stages or {"ideas", "novelty", "experiments", "writeup", "review"}
         self.run_id = run_id or datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.statuses = {}   # idea Name -> {"status": ..., "note": ...}
@@ -443,27 +448,34 @@ class PipelineRunner:
             if score is not None:
                 self._last_review_score[idea["Name"]] = score
 
-            # Review fix loop: a weak paper gets one repair round per
-            # AISC_REVIEW_FIX_ITER — the reviewer's verdict goes back to the
-            # coder, the paper is fixed, recompiled and re-reviewed.
+            # Improvement loop: the reviewer's verdict goes back to the coder
+            # (perform_improvement), the paper is fixed, recompiled and
+            # re-reviewed until it clears the score bar or rounds run out.
+            # Opt in per-run (pipeline/run IMPROVE) or via the legacy
+            # AISC_REVIEW_MIN_SCORE / AISC_REVIEW_FIX_ITER env pair.
             min_score = float(os.environ.get("AISC_REVIEW_MIN_SCORE", "0") or 0)
             fix_iters = int(os.environ.get("AISC_REVIEW_FIX_ITER", "0") or 0)
+            if self.improvement:
+                fix_iters = max(fix_iters, self.improve_rounds)
+                min_score = max(min_score, self.improve_min_score)
+            score_before = score
+            improve_open = False
             for it in range(fix_iters):
                 if min_score <= 0 or score is None or score >= min_score:
                     break
+                if not improve_open:
+                    improve_open = True
+                    self._emit("improve", "started",
+                               f"правки статьи по ревью: {score}/10 < {min_score}",
+                               idea_id=idea["Name"])
                 self.log(f"Ревью {score}/10 < {min_score} — раунд правок {it + 1}/{fix_iters}")
-                self._emit("review", "log",
-                           f"score {score}/10 — правки статьи ({it + 1}/{fix_iters})",
+                self._emit("improve", "log",
+                           f"score {score}/10 — раунд правок ({it + 1}/{fix_iters})",
                            idea_id=idea["Name"])
                 try:
                     tex = osp.join(folder_name, "latex", "template.tex")
                     coder = self._make_coder(folder_name, idea, [tex])
-                    coder.run(
-                        "The paper received the following reviewer feedback:\n"
-                        f"{json.dumps(review, indent=2)[:4000]}\n\n"
-                        "Revise latex/template.tex to address the weaknesses "
-                        "(clarity, missing details, overstated claims). Do not invent new results."
-                    )
+                    perform_improvement(review, coder)
                     from ai_scientist.perform_writeup import compile_latex
                     compile_latex(osp.join(folder_name, "latex"), pdf)
                     if osp.exists(pdf):
@@ -473,9 +485,23 @@ class PipelineRunner:
                         if score is not None:
                             self._last_review_score[idea["Name"]] = score
                             self.log(f"Повторное ревью: {score}/10")
+                except RunAborted:
+                    self._emit("improve", "fail", "правки прерваны", idea_id=idea["Name"])
+                    improve_open = False
+                    raise
                 except Exception as e:
                     self.log(f"Раунд правок не удался: {e}")
+                    self._emit("improve", "fail", str(e), idea_id=idea["Name"],
+                               detail={"error": str(e)[:300]})
+                    improve_open = False
                     break
+            if improve_open:
+                self._emit("improve", "done",
+                           f"правки завершены: {score_before}/10 → "
+                           f"{score if score is not None else '—'}/10",
+                           idea_id=idea["Name"],
+                           detail={"before": score_before, "after": score,
+                                   "min_score": min_score, "rounds": fix_iters})
 
             obsidian_notes.update_idea_status(self.template, idea["Name"], "reviewed",
                                               checklist={"Рецензия": True}, review=review)

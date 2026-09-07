@@ -218,9 +218,11 @@ export interface AppSettings {
   project: string
   model: string
   router: string
+  /** "off" | "on:<minScore>:<rounds>" — auto-improve papers after a weak review. */
+  improve: string
 }
 
-export const DEFAULT_SETTINGS: AppSettings = { theme: "opencode", animations: true, effect: "none", verbose: false, project: "", model: "", router: "openrouter" }
+export const DEFAULT_SETTINGS: AppSettings = { theme: "opencode", animations: true, effect: "none", verbose: false, project: "", model: "", router: "openrouter", improve: "off" }
 
 export const settings: AppSettings = { ...DEFAULT_SETTINGS }
 
@@ -239,6 +241,7 @@ export function loadSettings(): AppSettings {
     if (typeof raw.project === "string") settings.project = raw.project
     if (typeof raw.model === "string") settings.model = raw.model
     if (typeof raw.router === "string") settings.router = raw.router
+    if (typeof raw.improve === "string" && (raw.improve === "off" || /^on:\d+(\.\d+)?:\d+$/.test(raw.improve))) settings.improve = raw.improve
   } catch {}
   return settings
 }

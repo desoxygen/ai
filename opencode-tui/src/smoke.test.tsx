@@ -659,6 +659,28 @@ test("/run validates template before spawning anything", async () => {
   }
 })
 
+test("/improve sets the auto-improve preset (picker + inline args)", async () => {
+  const setup = await testRender(<App />, { width: 120, height: 40 })
+  try {
+    await setup.renderOnce()
+    await toChat(setup)
+    await setup.mockInput.typeText("/improve 5:2", 10)
+    setup.mockInput.pressEnter()
+    const set = await frameUntil(setup, (f) => f.includes("auto-improve: on"))
+    expect(set).toContain("≥5")
+    await setup.mockInput.typeText("/improve nonsense", 10)
+    setup.mockInput.pressEnter()
+    const bad = await frameUntil(setup, (f) => f.includes("usage: /improve"))
+    expect(bad).toContain("usage: /improve")
+    await setup.mockInput.typeText("/improve off", 10)
+    setup.mockInput.pressEnter()
+    await frameUntil(setup, (f) => f.includes("auto-improve: off"))
+  } finally {
+    setup.renderer.destroy()
+    if (existsSync(STATE)) rmSync(STATE)
+  }
+})
+
 test("Explorer enter suspends TUI, hands TTY to $EDITOR, resumes with file edited", async () => {
   const editor = join(tmpdir(), "ais_handoff_editor.cjs")
   writeFileSync(editor, 'require("fs").appendFileSync(process.argv[2], "\\n[handoff]\\n")\n')

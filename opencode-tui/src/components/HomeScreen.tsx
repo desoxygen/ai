@@ -29,6 +29,8 @@ export function HomeScreen({
   onNewProject,
   onRunProject,
   onGoDashboard,
+  improveLabel,
+  onPickImprove,
   consult,
   busy,
   thinking,
@@ -58,6 +60,8 @@ export function HomeScreen({
   onNewProject: () => void
   onRunProject: () => void
   onGoDashboard: () => void
+  improveLabel: string
+  onPickImprove: () => void
   consult: { q: string; a: string; running: boolean } | null
   busy: boolean
   thinking: string | null
@@ -88,6 +92,7 @@ export function HomeScreen({
     { key: "N", label: "new project", hint: "wizard — writes prompt.json + seed_ideas.json", run: onNewProject },
     { key: "R", label: "run pipeline", hint: project ? `/run ${project.name}` : "/run <template>", run: onRunProject },
     { key: "D", label: "dashboard", hint: "1 — experiments, agents, article", run: onGoDashboard },
+    { key: "A", label: "auto-improve", hint: improveLabel === "off" ? "off — /improve to pick a preset" : improveLabel, run: onPickImprove },
     { key: "I", label: "AGENTS.md", hint: "/init — bootstrap project context", run: () => onSend("/init") },
   ]
 
