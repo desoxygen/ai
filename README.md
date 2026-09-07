@@ -1,412 +1,193 @@
 <h1 align="center">
   <a href="https://github.com/SakanaAI/AI-Scientist/blob/main/docs/logo_2.png">
-    <img src="docs/logo_2.png" width="215" /></a><br>
-  <b>The AI Scientist</b><br>
-  <b>Automated Scientific Discovery Console</b><br>
+    <img src="docs/logo_2.png" width="220" alt="The AI Scientist" /></a><br>
+  <b>The AI Scientist — Console Edition</b><br>
+  <sub>Automated Scientific Discovery, from a terminal.</sub><br><br>
+  <a href="https://github.com/desoxygen/ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/desoxygen/ai/ci.yml?label=CI&logo=github" alt="CI"></a>
+  <a href="https://github.com/desoxygen/ai/releases/tag/v0.1-beta1"><img src="https://img.shields.io/github/v/tag/desoxygen/ai?label=version&color=orange" alt="v0.1-beta1"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=yellow" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/tests-196%20passing-brightgreen" alt="tests">
+  <a href="https://arxiv.org/abs/2408.06292"><img src="https://img.shields.io/badge/paper-arXiv%202408.06292-b31b1b?logo=arxiv&logoColor=white" alt="Paper"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AI%20Scientist%20Source%20Code-darkgray" alt="License"></a>
 </h1>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/2408.06292">Paper</a> |
-  <a href="https://sakana.ai/ai-scientist/">Blog</a> |
-  <a href="#quickstart">Quickstart</a> |
-  <a href="#cli-reference">CLI Reference</a>
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#what-you-get">What you get</a> •
+  <a href="#the-console">Console</a> •
+  <a href="#the-tui">TUI</a> •
+  <a href="#cli-reference">CLI</a> •
+  <a href="#beta-testing">Beta</a> •
+  <a href="docs/BETA0.1.md">Docs</a>
 </p>
 
 ---
 
-## What is this?
+**The AI Scientist** is a fully automated research pipeline: it generates
+ideas, checks them against the literature, runs real experiments with an LLM
+code agent, writes a LaTeX paper, reviews it like a conference referee — and
+now, **revises the paper from its own review** until it clears the bar.
 
-**The AI Scientist** is a fully automated research pipeline that generates ideas, runs experiments, writes papers, and reviews them — all powered by LLMs.
+This fork turns the research loop into a **product you can actually run**:
+a dark-mode terminal dashboard (TUI), an msfconsole-style REPL, and a
+headless CLI for CI — with guard rails, event streams, reproducible run
+metadata and a research journal written to Obsidian on the way.
 
-This fork adds a **console interface** (`aiscientist`) with an interactive REPL, a terminal UI (TUI), and a headless CLI for running the pipeline without manual supervision.
+```
+ ideas ──▶ novelty ──▶ experiments ──▶ writeup ──▶ review ──┐
+   ▲                                                        │ score < min
+   │            ┌───────────────────────────────────────────┘
+   └─ learnings ◀── improve (revise from feedback, re-review)
+```
 
-**Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review` — plus an optional **improve** loop (revise the paper from reviewer feedback and re-review) and an **AI skeleton** generator for new research projects.
+## What you get
 
----
+| | |
+|---|---|
+| **Guarded pipeline** | Stage guards stop runaway loops, repeated outputs and time-budget breaches — headless or interactive |
+| **`improve` loop** *(new)* | Weak review? The paper is rewritten from the reviewer's feedback, recompiled and re-reviewed: `/improve 6:2` |
+| **AI project skeletons** *(new)* | Describe a research direction; the model writes `experiment.py` + `plot.py` and runs the baseline so `/run` works on day one |
+| **Event contract** | Every stage emits `started/log/done/fail` JSON-lines — the dashboard, `/report` and `logs -f` all read the same stream |
+| **Reproducibility** | `run_meta.json` per idea: model, seeds, package versions, code hash; Welch-z sanity checks flag "too good to be true" results |
+| **Research journal** | Ideas, statuses and guard decisions sync to an Obsidian vault automatically |
+| **Any model** | OpenRouter, OpenAI, Anthropic, DeepSeek, Gemini, local Ollama — one env var |
+| **Multi-platform** | Linux, Windows, WSL and Docker; the test suite runs on all (196 tests, both OSes in CI) |
 
 ## Quickstart
 
-### 1. Install
-
 ```bash
-git clone <repo-url>
+git clone https://github.com/desoxygen/ai.git AI-Scientist
 cd AI-Scientist
 
-# Python 3.11+ required
-pip install -e .
+python -m venv .venv && .venv\Scripts\activate   # Windows (source .venv/bin/activate elsewhere)
+pip install -e .                                 # Python 3.11+
+
+cp .env.example .env                             # put your OPENROUTER_API_KEY inside
+aiscientist                                      # 🖥  opens the TUI (REPL if bun is absent)
 ```
 
-This installs the `aiscientist` command and all dependencies.
-
-### 2. Configure
+Prefer Docker (includes LaTeX, network-restricted):
 
 ```bash
-cp .env.example .env
+docker compose build && docker compose run --rm scientist
 ```
 
-Edit `.env` — set at least one API key:
+> **LaTeX** is needed only for the paper stages (`writeup`, `review`,
+> `improve`). Without it the pipeline still runs ideas → experiments and
+> degrades gracefully. Headless: `sudo apt-get install texlive-full chktex`.
+
+## The console
+
+`aiscientist` (no args) launches the **TUI**; `aiscientist repl` the
+msfconsole-style REPL. In the REPL:
 
 ```
-OPENROUTER_API_KEY=sk-or-...
-AISC_DEFAULT_MODEL=openrouter/z-ai/glm-5.2:free
+aiscientist > use pipeline/run
+aiscientist > set TEMPLATE nanoGPT_lite
+aiscientist > set IMPROVE on
+aiscientist > set IMPROVE_MIN_SCORE 6
+aiscientist > run                     # watch guarded stages live
+aiscientist > logs -f                 # event stream
+aiscientist > loot                    # paper PDF, review, metrics
 ```
 
-Optional: set `OBSIDIAN_VAULT_PATH` for research journal integration.
+The doom-style start menu gives you one-keystroke access:
 
-### 3. Run
+| Shift+key | Action | Shift+key | Action |
+|---|---|---|---|
+| `C` | continue project | `R` | run pipeline |
+| `P` | open project | `D` | dashboard |
+| `N` | new-project wizard | `A` | auto-improve preset |
+| `M` | **AI skeleton** (new) | `I` | `/init` project rules |
+
+## The TUI
+
+Six workspaces (`1`–`6`), a command palette (`ctrl+p`), leader keys
+(`ctrl+x`) and slash commands:
+
+```
+/run nanoGPT_lite            # pipeline — every stage lands on the Dashboard
+/improve 6:2                 # repair loop: min score 6, up to 2 rounds
+/skeleton lr_schedules       # AI writes experiment.py + plot.py + run_0 baseline
+/new-project                 # 6-step wizard, optional AI skeleton at step 5/6
+/report 3                    # markdown digest of a finished job → results/reports/
+/doctor                      # API key, LaTeX, aider, baseline — before burning credits
+```
+
+The Dashboard follows real jobs (stages, event rate sparklines, live log),
+Chat delegates background workers, Notes browses ideas/Obsidian, Article
+renders the generated paper as ANSI text.
+
+## CLI reference
 
 ```bash
-# Interactive console — TUI (falls back to the REPL if bun is missing)
-aiscientist
-
-# Or headless
-aiscientist run --template nanoGPT_lite --idea adaptive_block_size
-
-# Check status
-aiscientist status
-```
-
-That's it. The REPL will guide you through module selection, option tuning, and execution.
-
----
-
-## Installation Options
-
-### pip (recommended)
-
-```bash
-pip install -e .
-```
-
-Provides the `aiscientist` entry point.
-
-### Docker
-
-```bash
-cp .env.example .env   # fill in keys
-docker compose build
-docker compose run --rm scientist
-```
-
-### Manual (without install)
-
-```bash
-python -m ai_scientist.console.cli
-```
-
-### LaTeX (optional, for paper generation)
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install texlive-full chktex
-
-# macOS
-brew install --cask mactex
-```
-
-Without LaTeX, experiments run but writeup/review stages are skipped.
-
----
-
-## Console (REPL)
-
-The interactive console is the primary interface:
-
-```
-aiscientist > _
-```
-
-### Core Commands
-
-| Command | Description |
-|---------|-------------|
-| `help [topic]` | Show help (topics: start, modules, run, keys, cli, files) |
-| `use <module>` | Select a module (e.g., `use pipeline/run`) |
-| `set KEY VALUE` | Set module option (e.g., `set TEMPLATE nanoGPT_lite`) |
-| `show options` | Display current options |
-| `run` | Start execution |
-| `stop` | Abort running job |
-| `jobs` | List all jobs |
-| `logs [-f]` | Show events (add `-f` to follow in real-time) |
-| `loot` | Browse result artifacts |
-| `edit` | Open idea.md in $EDITOR |
-| `shell` | Drop to shell in workdir |
-| `exit` | Quit |
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `r` | Run |
-| `e` | Edit idea.md |
-| `j` | Jobs |
-| `!` | Shell |
-| `?` | Help |
-| `1`-`6` | Open .md files (idea, have, hypothesis, papers, Journal, README) |
-| `Tab` | Autocomplete |
-| `↑`/`↓` | Command history |
-
-### Modules
-
-| Module | Purpose |
-|--------|---------|
-| `pipeline/run` | Run full pipeline (ideas → experiments → writeup → review) |
-| `generate/skeleton` | AI-generated project skeleton (experiment.py + plot.py + baseline) |
-| `auxiliary/env` | Check environment (API keys, LaTeX, vault) |
-| `auxiliary/ideas` | List generated ideas for a template |
-| `auxiliary/models` | Browse LLM models |
-| `report/last` | Show artifacts from the last run |
-
----
-
-## CLI Reference
-
-Headless mode for scripts and CI:
-
-```bash
-# Run pipeline
-aiscientist run --template nanoGPT_lite --stages ideas,novelty,experiments \
-  --num-ideas 2 --model openrouter/z-ai/glm-5.2:free
-
-# Run with the review→repair→re-review improve loop
 aiscientist run --template nanoGPT_lite --idea adaptive_block_size \
+  --stages ideas,novelty,experiments,writeup,review \
   --improve --min-score 6 --rounds 2
 
-# Generate an AI skeleton for a brand-new research project
-aiscientist skeleton --name my_study --description "Compare LR schedules on a tiny transformer"
+aiscientist skeleton --name my_study \
+  --description "Compare LR schedules on a tiny transformer"   # + run_0 baseline
 
-# Check status
-aiscientist status
-
-# View events
-aiscientist logs -j 5
-
-# Search modules
-aiscientist search pipeline
+aiscientist status          # job board
+aiscientist logs -j 5       # event stream of a job
+aiscientist search pipeline # module catalog
 ```
 
-### Exit Codes
+| Exit code | Meaning | | Env (`.env`) | |
+|---|---|---|---|---|
+| `0` | success | | `OPENROUTER_API_KEY` | model access |
+| `1` | stage failed | | `AISC_DEFAULT_MODEL` | default model |
+| `130` | aborted (`stop` / ctrl-c) | | `AISC_RESULTS_DIR` | redirect artifacts |
+| | | | `AISC_SEED` / `AISC_EXP_SEEDS` | reproducibility |
+| | | | `AISC_MAX_STAGE_MINUTES` | time budgets |
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Stage failed |
-| `130` | Aborted by user |
+Full table: [docs/BETA0.1.md §9](docs/BETA0.1.md).
 
----
+## Project layout
 
-## TUI (Terminal Dashboard)
-
-A rich terminal UI built with Bun + React:
-
-```bash
-cd opencode-tui
-bun install
-bun run start
 ```
-
-Features: Dashboard, Chat, Explorer, Notes, Agents, Article viewer. Slash commands include `/run`, `/improve`, `/skeleton`, `/new-project` (with a 6th step that generates a runnable AI skeleton), `/doctor`.
-
-Requires [Bun](https://bun.sh) installed on your system.
-
----
-
-## Configuration
-
-### Environment Variables (`.env`)
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENROUTER_API_KEY` | — | API key for OpenRouter models |
-| `AISC_DEFAULT_MODEL` | `openrouter/z-ai/glm-5.2:free` | Default LLM model |
-| `AISC_DISCUSS_MODEL` | — | Model for discussions (falls back to default) |
-| `AISC_REVIEW_MODEL` | — | Model for reviews (falls back to default) |
-| `OBSIDIAN_VAULT_PATH` | — | Path to Obsidian vault for journal |
-| `AISC_SEED` | — | RNG seed for reproducibility |
-| `AISC_EXP_SEEDS` | — | Comma-separated seeds for multi-seed runs |
-| `AISC_LLM_MAX_TRIES` | `8` | Max LLM retries per stage |
-| `AISC_STAGE_MAX_FAILURES` | `3` | Max consecutive failures before skip |
-| `AISC_MAX_STAGE_MINUTES` | `0` | Time limit per stage (0 = unlimited) |
-| `AISC_INTERACTIVE` | `auto` | Interactive mode: `auto`/`yes`/`no` |
-
-### Console Config (`aiscientist.toml`)
-
-```toml
-default_module = "pipeline/run"
-default_template = "nanoGPT_lite"
-default_idea = ""
+ai_scientist/
+├── console/           # entry point, REPL, module registry, jobs, events, i18n (EN/RU)
+│   └── modules/       # pipeline/run · generate/skeleton · auxiliary/* · report/last
+├── pipeline.py        # PipelineRunner: guarded stages + improve loop
+├── perform_*.py       # experiments (Aider), writeup (LaTeX), review
+└── ...
+opencode-tui/          # Bun + React terminal dashboard
+templates/nanoGPT_lite # ships ready-to-run (baseline included)
+docs/                  # BETA0.1.md (single source of truth) + release notes
 ```
-
----
-
-## Templates
-
-The pipeline works with research templates in `templates/`:
-
-| Template | Domain |
-|----------|--------|
-| `nanoGPT_lite` | Transformer training (included) |
-| `2d_diffusion` | Diffusion models (setup required) |
-| `grokking` | Neural network generalization (setup required) |
-
-### Setting Up Additional Templates
-
-```bash
-# 2D Diffusion
-git clone https://github.com/gregversteeg/NPEET.git
-cd NPEET && pip install . && cd ..
-cd templates/2d_diffusion
-python experiment.py --out_dir run_0
-python plot.py
-
-# Grokking
-pip install einops
-cd templates/grokking
-python experiment.py --out_dir run_0
-python plot.py
-```
-
-### Creating Custom Templates
-
-Create a directory under `templates/` with:
-
-- `experiment.py` — Main experiment script (takes `--out_dir`)
-- `plot.py` — Plotting script
-- `prompt.json` — System + task description for the LLM
-- `seed_ideas.json` — Example ideas
-- `latex/template.tex` — Paper template
-
----
 
 ## Safety
 
-> **Warning:** This codebase executes LLM-generated code. Use in a sandboxed environment.
+> **Warning.** The pipeline executes LLM-generated code. Run it in Docker or
+> another sandbox, not on a machine you love. Stage guards cap iterations,
+> repeated outputs and wall-clock per stage; interactive mode asks before
+> continuing past a limit.
 
-```bash
-# Run in Docker with restricted network
-docker compose run --rm scientist
-```
+## Beta testing — v0.1-beta1
 
-- Loop guard prevents runaway executions
-- Stage failures auto-skip with configurable thresholds
-- Interactive mode asks before continuing on errors
+1. `aiscientist` → Shift+R on `nanoGPT_lite` → watch the full loop, enable **A** for the improve pass.
+2. Shift+N → wizard → step 5/6 **AI skeleton: y** → a new domain becomes runnable end-to-end.
+3. Broken? `/report <jobId>` + `/export` and [open an issue](https://github.com/desoxygen/ai/issues) with the digest.
 
----
+Release notes: [docs/RELEASE-v0.1-beta1.md](docs/RELEASE-v0.1-beta1.md).
 
-## Models
+## Contributing & docs
 
-Supported via `AISC_DEFAULT_MODEL`:
+The living spec is [`docs/BETA0.1.md`](docs/BETA0.1.md) (architecture, event
+contract, backlog). Welcome: new research templates, console modules, model
+providers, docs and tests.
 
-| Provider | Examples |
-|----------|----------|
-| OpenRouter | `openrouter/z-ai/glm-5.2:free` |
-| OpenAI | `openai/gpt-4o` |
-| Anthropic | `anthropic/claude-sonnet-4-20250514` |
-| DeepSeek | `deepseek/deepseek-chat` |
-| Google | `google/gemini-2.0-flash-001` |
-| Local | `ollama/qwen2.5-coder:7b-instruct-q4_K_M` |
+## License & citation
 
-See `ai_scientist/llm.py` for the full list.
+**The AI Scientist Source Code License** (derivative of Responsible AI
+License). Mandatory disclosure in any resulting publication:
 
----
+> "This manuscript was autonomously generated using
+> [The AI Scientist](https://github.com/SakanaAI/AI-Scientist)."
 
-## Project Structure
-
-```
-AI-Scientist/
-├── ai_scientist/
-│   ├── console/          # REPL, CLI, modules, events, jobs
-│   │   ├── cli.py        # Entry point
-│   │   ├── repl.py       # Interactive console
-│   │   ├── modules/      # Plugin modules
-│   │   └── ...
-│   ├── pipeline.py       # Core pipeline runner
-│   ├── generate_ideas.py # Idea generation
-│   ├── perform_experiments.py
-│   ├── perform_writeup.py
-│   ├── perform_review.py
-│   └── settings.py       # Configuration
-├── opencode-tui/         # Bun/React TUI
-├── templates/            # Research templates
-├── results/              # Run artifacts + job logs
-├── tests/                # Test suite
-├── pyproject.toml
-├── requirements.txt
-├── Dockerfile
-└── .env.example
-```
-
----
-
-## Testing
-
-```bash
-# Run all tests
-python -m pytest tests/ -q
-
-# With coverage
-python -m pytest tests/ --cov=ai_scientist
-
-# Smoke test
-python tests/test_smoke.py
-```
-
----
-
-## Docker
-
-```bash
-# Build
-docker compose build
-
-# Run interactive
-docker compose run --rm scientist
-
-# Run headless
-docker compose run --rm scientist run --template nanoGPT_lite --stages ideas
-
-# Run tests
-docker compose run --rm --entrypoint python scientist -m pytest tests/
-```
-
-Edit `docker-compose.yml` to mount your Obsidian vault (see comments in file).
-
----
-
-## Beta Testing
-
-This is **v0.1-beta1**. What to try:
-
-1. **Full loop on a shipped template:** `aiscientist` → Shift+R (or `/run nanoGPT_lite`) → follow stages on the Dashboard; enable `A` (auto-improve) for the review→repair→re-review loop.
-2. **New research direction:** Shift+N → wizard → step 5/6 **AI skeleton: y** → the model writes `experiment.py` + `plot.py` and runs the `run_0` baseline, then `/run <name>` works end to end.
-3. **Environment:** `/doctor` checks the LLM key, LaTeX, aider, vault, and the baseline before you burn credits.
-
-What to report: stage failures (`/report <jobId>` writes a markdown digest into `results/reports/`), guard decisions, anything that hangs, and Windows/WSL-specific issues.
-
----
-
-## Contributing
-
-See the Backlog section in [`docs/BETA0.1.md`](docs/BETA0.1.md) for planned features. Areas welcome:
-
-- New research templates
-- Console module plugins
-- Additional model integrations
-- Documentation improvements
-
----
-
-## License
-
-**The AI Scientist Source Code License** (derivative of Responsible AI License).
-
-**Mandatory:** Clearly disclose AI use in any resulting publications:
-
-> "This manuscript was autonomously generated using [The AI Scientist](https://github.com/SakanaAI/AI-Scientist)."
-
----
-
-## Citing
+Built on [SakanaAI/AI-Scientist](https://github.com/SakanaAI/AI-Scientist) —
+please cite the original work:
 
 ```bibtex
 @article{lu2024aiscientist,
@@ -416,11 +197,3 @@ See the Backlog section in [`docs/BETA0.1.md`](docs/BETA0.1.md) for planned feat
   year={2024}
 }
 ```
-
----
-
-<p align="center">
-  <a href="https://star-history.com/#SakanaAI/AI-Scientist&Date">
-    <img src="https://api.star-history.com/svg?repos=SakanaAI/AI-Scientist&type=Date" width="600" />
-  </a>
-</p>
