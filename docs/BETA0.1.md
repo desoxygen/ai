@@ -1,6 +1,7 @@
 # AI-Scientist Beta 0.1 — Complete Documentation
 
-> Single source of truth for the project. Generated 2026-09-06.
+> Single source of truth for the project. Generated 2026-09-06; updated 2026-09-07 for **v0.1-beta1**
+> (improve loop, generate/skeleton, `AISC_RESULTS_DIR`, hermetic tests). Release notes: `docs/RELEASE-v0.1-beta1.md`.
 > Replaces: AGENTS.md, BETA1_AUDIT.md, BETA1_PLAN.md, BACKLOG.md, EVENTS.md, README-BETA1.md, TUI_REDESIGN.md, TUI_MODERNIZATION.md, docs/UI_IMPROVEMENTS.md
 
 ---
@@ -9,7 +10,7 @@
 
 **AI-Scientist** is a fully automated research pipeline that generates ideas, runs experiments, writes papers, and reviews them — all powered by LLMs.
 
-**Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review`
+**Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review` (+ optional `improve` loop: revise paper from reviewer feedback and re-review)
 
 **Primary interface: TUI** (`opencode-tui/`) — Bun/React terminal dashboard. This is the main user-facing product.
 
@@ -40,6 +41,7 @@ AI-Scientist/
 │   │       ├── auxiliary/env.py
 │   │       ├── auxiliary/ideas.py
 │   │       ├── auxiliary/models.py
+│   │       ├── generate/skeleton.py
 │   │       └── report/last.py
 │   ├── pipeline.py           # PipelineRunner (575 lines)
 │   ├── generate_ideas.py     # Idea generation + novelty check
@@ -88,7 +90,7 @@ cp .env.example .env
 ### Run
 
 ```bash
-# Interactive REPL (recommended)
+# Interactive console — TUI (primary; falls back to REPL without bun)
 aiscientist
 
 # Headless CLI
@@ -169,7 +171,10 @@ def run(options, job, emit, stop_event=None) -> dict:
 | `auxiliary/env` | auxiliary | Check environment |
 | `auxiliary/ideas` | auxiliary | List template ideas |
 | `auxiliary/models` | auxiliary | Browse LLM models |
+| `generate/skeleton` | generate | AI-generated project skeleton (experiment.py + plot.py + baseline) |
 | `report/last` | report | Show last run artifacts |
+
+**`pipeline/run` options:** `TEMPLATE`, `MODEL`, `IDEA`, `NUM_IDEAS`, `NUM_REFLECTIONS`, `STAGES`, `ENGINE`, plus `IMPROVE` (`on`/`off`), `IMPROVE_MIN_SCORE`, `IMPROVE_ROUNDS` to enable the review-driven paper-repair loop.
 
 ### Language Support
 
@@ -194,6 +199,9 @@ aiscientist status
 
 # View events
 aiscientist logs -j 5
+
+# Generate an AI skeleton for a new research project
+aiscientist skeleton --name my_study --description "Compare LR schedules on a tiny transformer"
 
 # Search modules
 aiscientist search pipeline
@@ -237,7 +245,9 @@ bun run start
 
 | Command | Description |
 |---------|-------------|
-| `/run <template>` | Start pipeline run |
+| `/run <template>` | Start pipeline run (honors `/improve`) |
+| `/improve [off\|on\|min:rounds]` | Configure the review→repair→re-review loop |
+| `/skeleton <project>` | Generate an AI skeleton (experiment.py + plot.py + baseline) |
 | `/new-project` | Create new project |
 | `/init` | Generate AGENTS.md |
 | `/delegate <task>` | Spawn background worker |
@@ -334,6 +344,8 @@ Events are JSON-line records in `results/events/<job_id>.jsonl`.
 | `experiments` | `PipelineRunner.stage_experiments` |
 | `writeup` | `PipelineRunner.stage_writeup` |
 | `review` | `PipelineRunner.stage_review` |
+| `improve` | review→revise→re-review loop inside `stage_review` (detail: `before`/`after` score) |
+| `skeleton` | `generate/skeleton` module (AI project skeleton + baseline run) |
 | `system` | Console core (job created, stop, etc.) |
 
 ### Status Semantics
@@ -372,6 +384,10 @@ Rules:
 | `AISC_INTERACTIVE` | `auto` | Interactive mode: `auto`/`yes`/`no` |
 | `AISC_ON_LIMIT` | `ask` | Action on limit: `ask`/`continue`/`skip`/`abort` |
 | `AISC_LANG` | `en` | Console language: `en`/`ru` |
+| `AISC_RESULTS_DIR` | `results/` | Redirect all artifacts (jobs/events/results) — tests + sandboxes |
+| `AISC_REVIEW_MIN_SCORE` | `0` | Legacy: auto-repair papers below this score (0=off) |
+| `AISC_REVIEW_FIX_ITER` | `0` | Legacy: max repair rounds (0=off) |
+| `AISC_SKELETON_TIMEOUT_MIN` | `20` | generate/skeleton baseline run_0 timeout (minutes) |
 
 ### Console Config (`aiscientist.toml`)
 

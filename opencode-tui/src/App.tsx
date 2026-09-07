@@ -1905,10 +1905,11 @@ export function App() {
             `python:         ${process.env.AISC_PYTHON || "python"}`,
             `multi-seed:     AISC_EXP_SEEDS=${process.env.AISC_EXP_SEEDS || "1"}`,
             `idea budget:    AISC_IDEA_BUDGET_MINUTES=${process.env.AISC_IDEA_BUDGET_MINUTES || "off"}`,
-            `review fix:     AISC_REVIEW_FIX_ITER=${process.env.AISC_REVIEW_FIX_ITER || "0"} · min score ${process.env.AISC_REVIEW_MIN_SCORE || "off"}`,
+            `auto-improve:   ${improveLabel(settings.improve)}${process.env.AISC_REVIEW_FIX_ITER ? ` (env legacy: iter ${process.env.AISC_REVIEW_FIX_ITER}, min ${process.env.AISC_REVIEW_MIN_SCORE || "off"})` : ""}`,
+            `baseline:       ${projectName ? (existsSync(join(PROJECT_ROOT, "templates", projectName, "run_0", "final_info.json")) ? `OK (templates/${projectName}/run_0)` : `MISSING — run /skeleton ${projectName}`) : "no project selected"}`,
           ]
           const probe = (cmd: string) => runShell(cmd, process.cwd(), 8000).then((r) => `${cmd}: ${r.code === 0 ? "OK" : "NOT FOUND"}`)
-          void Promise.all([probe("python --version"), probe("pdflatex --version")]).then((checks) => {
+          void Promise.all([probe("python --version"), probe("pdflatex --version"), probe("aider --version")]).then((checks) => {
             pushStatic(["environment:", ...rows, ...checks].map((l) => `  ${l}`).join("\n") + "\n", "doctor")
           })
           return true

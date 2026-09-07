@@ -20,7 +20,7 @@
 
 This fork adds a **console interface** (`aiscientist`) with an interactive REPL, a terminal UI (TUI), and a headless CLI for running the pipeline without manual supervision.
 
-**Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review`
+**Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review` — plus an optional **improve** loop (revise the paper from reviewer feedback and re-review) and an **AI skeleton** generator for new research projects.
 
 ---
 
@@ -56,7 +56,7 @@ Optional: set `OBSIDIAN_VAULT_PATH` for research journal integration.
 ### 3. Run
 
 ```bash
-# Interactive REPL (recommended)
+# Interactive console — TUI (falls back to the REPL if bun is missing)
 aiscientist
 
 # Or headless
@@ -151,8 +151,10 @@ aiscientist > _
 | Module | Purpose |
 |--------|---------|
 | `pipeline/run` | Run full pipeline (ideas → experiments → writeup → review) |
+| `generate/skeleton` | AI-generated project skeleton (experiment.py + plot.py + baseline) |
 | `auxiliary/env` | Check environment (API keys, LaTeX, vault) |
 | `auxiliary/ideas` | List generated ideas for a template |
+| `auxiliary/models` | Browse LLM models |
 | `report/last` | Show artifacts from the last run |
 
 ---
@@ -165,6 +167,13 @@ Headless mode for scripts and CI:
 # Run pipeline
 aiscientist run --template nanoGPT_lite --stages ideas,novelty,experiments \
   --num-ideas 2 --model openrouter/z-ai/glm-5.2:free
+
+# Run with the review→repair→re-review improve loop
+aiscientist run --template nanoGPT_lite --idea adaptive_block_size \
+  --improve --min-score 6 --rounds 2
+
+# Generate an AI skeleton for a brand-new research project
+aiscientist skeleton --name my_study --description "Compare LR schedules on a tiny transformer"
 
 # Check status
 aiscientist status
@@ -196,7 +205,7 @@ bun install
 bun run start
 ```
 
-Features: Dashboard, Chat, Explorer, Notes, Agents, Article viewer.
+Features: Dashboard, Chat, Explorer, Notes, Agents, Article viewer. Slash commands include `/run`, `/improve`, `/skeleton`, `/new-project` (with a 6th step that generates a runnable AI skeleton), `/doctor`.
 
 Requires [Bun](https://bun.sh) installed on your system.
 
@@ -361,6 +370,18 @@ docker compose run --rm --entrypoint python scientist -m pytest tests/
 ```
 
 Edit `docker-compose.yml` to mount your Obsidian vault (see comments in file).
+
+---
+
+## Beta Testing
+
+This is **v0.1-beta1**. What to try:
+
+1. **Full loop on a shipped template:** `aiscientist` → Shift+R (or `/run nanoGPT_lite`) → follow stages on the Dashboard; enable `A` (auto-improve) for the review→repair→re-review loop.
+2. **New research direction:** Shift+N → wizard → step 5/6 **AI skeleton: y** → the model writes `experiment.py` + `plot.py` and runs the `run_0` baseline, then `/run <name>` works end to end.
+3. **Environment:** `/doctor` checks the LLM key, LaTeX, aider, vault, and the baseline before you burn credits.
+
+What to report: stage failures (`/report <jobId>` writes a markdown digest into `results/reports/`), guard decisions, anything that hangs, and Windows/WSL-specific issues.
 
 ---
 
