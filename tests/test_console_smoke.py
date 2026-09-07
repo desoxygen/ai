@@ -24,10 +24,10 @@ class TestConsoleImports:
         from ai_scientist.console import cli
         assert callable(cli.main)
 
-    def test_import_repl(self):
-        from ai_scientist.console import repl
-        assert hasattr(repl, "Console")
-        assert hasattr(repl, "execute_job")
+    def test_import_runner(self):
+        from ai_scientist.console import runner
+        assert callable(runner.execute_job)
+        assert callable(runner.format_event)
 
     def test_import_registry(self):
         from ai_scientist.console import registry
@@ -43,32 +43,6 @@ class TestConsoleImports:
         from ai_scientist.console import events
         assert callable(events.emit_factory)
         assert callable(events.read_events)
-
-    def test_import_config(self):
-        from ai_scientist.console import config
-        assert callable(config.load_defaults)
-
-    def test_import_home(self):
-        from ai_scientist.console import home
-        assert callable(home.render)
-
-
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-class TestConsoleConfig:
-    def test_load_defaults_returns_dict(self):
-        from ai_scientist.console.config import load_defaults
-        d = load_defaults()
-        assert isinstance(d, dict)
-        assert "default_module" in d
-        assert "default_template" in d
-
-    def test_config_file_created(self):
-        from ai_scientist.console.config import ensure_config, config_path
-        p = ensure_config()
-        assert p.exists()
-        assert p.suffix == ".toml"
 
 
 # ---------------------------------------------------------------------------
@@ -184,47 +158,53 @@ class TestEvents:
 
 
 # ---------------------------------------------------------------------------
-# REPL dispatch
+# Runner (shared headless execute_job used by the TUI + debug CLI)
 # ---------------------------------------------------------------------------
-class TestReplDispatch:
-    def test_console_init(self):
-        from ai_scientist.console.repl import Console
-        c = Console()
-        assert c.running is True
-        assert c.current_module is None
+class _FakeModule:
+    def __init__(self, name, result):
+        self.name = name
+        self._result = result
 
-    def test_handle_empty_line_shows_home(self, capsys):
-        from ai_scientist.console.repl import Console
-        c = Console()
-        c.handle("")
-        captured = capsys.readouterr()
-        assert "aiscientist" in captured.out.lower() or "aiscientist" in captured.out
+    def run(self, options, job, emit, stop_event=None):
+        emit("run", "log", "working")
+        return self._result
 
-    def test_handle_unknown_command(self, capsys):
-        from ai_scientist.console.repl import Console
-        c = Console()
-        c.handle("nonexistent")
-        captured = capsys.readouterr()
-        assert "неизвестная" in captured.out.lower() or "unknown" in captured.out.lower()
 
-    def test_exploit_alias_runs(self, capsys):
-        from ai_scientist.console.repl import Console
-        c = Console()
-        # exploit should work like run — starts a job with default module
-        c.handle("exploit")
-        captured = capsys.readouterr()
-        # either starts a job or reports missing module — either way, no crash
-        assert "job" in captured.out.lower() or "ошибка" in captured.out.lower() or "нет" in captured.out.lower()
+class TestRunner:
+    def test_execute_job_success(self, tmp_path, monkeypatch):
+        from ai_scientist.console.runner import execute_job
+        from ai_scientist.console.jobs import JobRegistry
+        monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
+        jobs = JobRegistry()
+        code = execute_job(_FakeModule("x/y", {"ok": True, "z": 1}),
+                           {"TEMPLATE": "t"}, jobs, printer=lambda ev: None)
+        assert code == 0
+        assert jobs.last().status == "done"
 
-    def test_commands_list(self):
-        from ai_scientist.console.repl import Console
-        c = Console()
-        cmds = c._commands()
-        assert "run" in cmds
-        assert "exploit" in cmds
-        assert "help" in cmds
-        assert "exit" in cmds
-        assert "lang" in cmds
+    def test_execute_job_reports_failure(self, tmp_path, monkeypatch):
+        from ai_scientist.console.runner import execute_job
+        from ai_scientist.console.jobs import JobRegistry
+        monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
+        jobs = JobRegistry()
+        code = execute_job(_FakeModule("x/y", {"ok": False}),
+                           {}, jobs, printer=lambda ev: None)
+        assert code == 1
+        assert jobs.last().status == "failed"
+
+    def test_execute_job_aborted_exit_code(self, tmp_path, monkeypatch):
+        from ai_scientist.console.runner import execute_job
+        from ai_scientist.console.jobs import JobRegistry
+        monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
+        jobs = JobRegistry()
+        code = execute_job(_FakeModule("x/y", {"aborted": True}),
+                           {}, jobs, printer=lambda ev: None)
+        assert code == 130
+        assert jobs.last().status == "aborted"
+
+    def test_format_event_shape(self):
+        from ai_scientist.console.runner import format_event
+        assert "ideas" in format_event({"status": "done", "stage": "ideas", "message": "3 ideas"})
+        assert format_event({"status": "fail", "stage": "run", "message": "boom"}).startswith("[-]")
 
 
 # ---------------------------------------------------------------------------
@@ -316,11 +296,3 @@ class TestI18n:
         assert isinstance(s, str)
         assert len(s) > 0
 
-    def test_lang_command_in_repl(self, capsys):
-        from ai_scientist.console.repl import Console
-        from ai_scientist.console.i18n import set_language
-        set_language("en")
-        c = Console()
-        c.handle("lang")
-        captured = capsys.readouterr()
-        assert "language" in captured.out.lower() or "язык" in captured.out.lower()

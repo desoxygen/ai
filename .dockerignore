@@ -13,4 +13,8 @@ experimental/
 Dockerfile
 docker-compose.yml
 .dockerignore
-opencode-tui/
+# ship the TUI source; deps are installed inside the image from bun.lock
+opencode-tui/node_modules/
+opencode-tui/state.json
+opencode-tui/models.cache*.json
+opencode-tui/dbg/

@@ -72,7 +72,7 @@ def emit_factory(job, printer=None):
     """Создаёт emit(stage, status, message, **kw) для одного job'а.
 
     Пишет событие в журнал (results/events/<job_id>.jsonl) и, если задан
-    printer(ev), печатает его. Общий для REPL и CLI.
+    printer(ev), печатает его. Общий для headless CLI (TUI-запуск) и отладки.
     """
     def emit(stage, status, message, **kw):
         ev = make_event(

@@ -1,4 +1,4 @@
-"""Каталог модулей консоли (как `modules/` в Metasploit).
+"""Каталог модулей headless-раннера (использует TUI и отладочный CLI).
 
 Каждый модуль — файл в подпакете `ai_scientist.console.modules.<type>/<name>.py`,
 экспортирующий:

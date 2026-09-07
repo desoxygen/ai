@@ -1,7 +1,8 @@
 # AI-Scientist Beta 0.1 — Complete Documentation
 
-> Single source of truth for the project. Generated 2026-09-06; updated 2026-09-07 for **v0.1-beta1**
-> (improve loop, generate/skeleton, `AISC_RESULTS_DIR`, hermetic tests). Release notes: `docs/RELEASE-v0.1-beta1.md`.
+> Single source of truth for the project. Generated 2026-09-06; updated 2026-09-07 for **v0.1-beta2**
+> (TUI is now the **only** interface — the REPL was removed; improve loop, generate/skeleton,
+> `AISC_RESULTS_DIR`, hermetic tests). Release notes: `docs/RELEASE-v0.1-beta2.md`; hidden runner: `docs/DEBUG.md`.
 > Replaces: AGENTS.md, BETA1_AUDIT.md, BETA1_PLAN.md, BACKLOG.md, EVENTS.md, README-BETA1.md, TUI_REDESIGN.md, TUI_MODERNIZATION.md, docs/UI_IMPROVEMENTS.md
 
 ---
@@ -12,13 +13,11 @@
 
 **Pipeline stages:** `ideas` → `novelty` → `experiments` → `writeup` → `review` (+ optional `improve` loop: revise paper from reviewer feedback and re-review)
 
-**Primary interface: TUI** (`opencode-tui/`) — Bun/React terminal dashboard. This is the main user-facing product.
+**The only interface: the TUI** (`opencode-tui/`) — a Bun/React terminal dashboard. This is the sole user-facing product; bare `aiscientist` launches it.
 
-**Supporting interfaces:**
-- **REPL** (`aiscientist repl`) — msfconsole-style interactive console (wraps the pipeline, not a standalone product)
-- **CLI** (`aiscientist run/status/logs`) — headless mode for scripts and CI
+**Not an interface — backend plumbing:** a headless runner (`aiscientist -q run|skeleton|status|logs|search`) that the TUI spawns and CI/scripts reuse. The msfconsole-style REPL that shipped in beta 1 was removed in beta 2 (it duplicated the TUI and confused the product story). Runner details live in [DEBUG.md](DEBUG.md), not in user docs.
 
-**Key design principle:** The console wraps the existing science (`pipeline.py`, `generate_ideas.py`, `perform_*.py`) without modifying it. Science code is untouchable.
+**Key design principle:** The runner wraps the existing science (`pipeline.py`, `generate_ideas.py`, `perform_*.py`) without modifying it. Science code is untouchable.
 
 ---
 
@@ -27,15 +26,13 @@
 ```
 AI-Scientist/
 ├── ai_scientist/
-│   ├── console/              # REPL, CLI, modules, events, jobs, i18n
-│   │   ├── cli.py            # Entry point (aiscientist command)
-│   │   ├── repl.py           # Interactive console (932 lines)
+│   ├── console/              # headless runner: entry, modules, events, jobs, i18n
+│   │   ├── cli.py            # Entry point (aiscientist command → TUI; -q → headless)
+│   │   ├── runner.py         # Shared execute_job/format_event (no interactive UI)
 │   │   ├── registry.py       # ModuleRegistry auto-discovery
 │   │   ├── jobs.py           # JobRegistry (results/jobs.jsonl)
 │   │   ├── events.py         # Event contract (JSON-line)
-│   │   ├── config.py         # aiscientist.toml defaults
-│   │   ├── i18n.py           # Translations (EN/RU)
-│   │   ├── home.py           # Neofetch-style home screen
+│   │   ├── i18n.py           # Translations (EN/RU) for runner/module messages
 │   │   └── modules/          # Plugin modules (auto-discovered)
 │   │       ├── pipeline/run.py
 │   │       ├── auxiliary/env.py
@@ -58,7 +55,7 @@ AI-Scientist/
 ├── templates/                # Research templates
 │   └── nanoGPT_lite/         # Included template
 ├── results/                  # Run artifacts + job logs
-├── tests/                    # Test suite (102 tests)
+├── tests/                    # Test suite (107 pytest + standalone smoke)
 ├── pyproject.toml            # Package config (aiscientist entry point)
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Docker support
@@ -90,15 +87,12 @@ cp .env.example .env
 ### Run
 
 ```bash
-# Interactive console — TUI (primary; falls back to REPL without bun)
+# Open the TUI — the only interface there is
 aiscientist
-
-# Headless CLI
-aiscientist run --template nanoGPT_lite --idea adaptive_block_size
-
-# Check status
-aiscientist status
 ```
+
+CI and debugging can bypass the TUI through the hidden headless runner
+(`aiscientist -q run|skeleton|status|logs`) — see [DEBUG.md](DEBUG.md).
 
 ### Docker
 
@@ -109,41 +103,9 @@ docker compose run --rm scientist
 
 ---
 
-## 4. Console (REPL)
+## 4. Modules & Runner
 
-The interactive console is the primary interface for researchers.
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `help [topic]` | Show help (topics: start, modules, run, keys, cli, files) |
-| `use <module>` | Select a module (e.g., `use pipeline/run`) |
-| `set KEY VALUE` | Set module option |
-| `show options` | Display current options |
-| `show modules` | List all available modules |
-| `run` | Start execution |
-| `stop` | Abort running job |
-| `jobs` | List all jobs |
-| `logs [-f]` | Show events (add `-f` to follow in real-time) |
-| `loot` | Browse result artifacts |
-| `edit` | Open idea.md in $EDITOR |
-| `shell` | Drop to shell in workdir |
-| `lang [en\|ru]` | Set or show language |
-| `exit` | Quit |
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `r` | Run |
-| `e` | Edit idea.md |
-| `j` | Jobs |
-| `!` | Shell |
-| `?` | Help |
-| `1`-`6` | Open .md files (idea, have, hypothesis, papers, Journal, README) |
-| `Tab` | Autocomplete |
-| `↑`/`↓` | Command history |
+There is **no interactive console to learn** — the TUI is the only interface. This section documents the module system that both the TUI and the headless runner drive (runner details: [DEBUG.md](DEBUG.md)).
 
 ### Module System
 
@@ -179,44 +141,16 @@ def run(options, job, emit, stop_event=None) -> dict:
 ### Language Support
 
 Default language: English. Switch with:
-- `lang ru` in REPL
-- `--lang ru` CLI flag
+- `--lang ru` flag (headless runner)
 - `AISC_LANG=ru` environment variable
 
 ---
 
-## 5. CLI Reference
+## 5. Headless Runner (debug / CI only)
 
-Headless mode for scripts and CI:
-
-```bash
-# Run pipeline
-aiscientist run --template nanoGPT_lite --stages ideas,novelty,experiments \
-  --num-ideas 2 --model openrouter/z-ai/glm-5.2:free
-
-# Check status
-aiscientist status
-
-# View events
-aiscientist logs -j 5
-
-# Generate an AI skeleton for a new research project
-aiscientist skeleton --name my_study --description "Compare LR schedules on a tiny transformer"
-
-# Search modules
-aiscientist search pipeline
-
-# Set language
-aiscientist --lang ru status
-```
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Stage failed |
-| `130` | Aborted by user |
+The headless runner is **not a user interface** — it is the backend the TUI
+spawns. Full command list, exit codes and internals are documented in
+[DEBUG.md](DEBUG.md). Users only ever run `aiscientist` (the TUI).
 
 ---
 
@@ -346,7 +280,7 @@ Events are JSON-line records in `results/events/<job_id>.jsonl`.
 | `review` | `PipelineRunner.stage_review` |
 | `improve` | review→revise→re-review loop inside `stage_review` (detail: `before`/`after` score) |
 | `skeleton` | `generate/skeleton` module (AI project skeleton + baseline run) |
-| `system` | Console core (job created, stop, etc.) |
+| `system` | Runner core (job created, stop, etc.) |
 
 ### Status Semantics
 
@@ -383,19 +317,11 @@ Rules:
 | `AISC_MAX_STAGE_MINUTES` | `0` | Time limit per stage (0 = unlimited) |
 | `AISC_INTERACTIVE` | `auto` | Interactive mode: `auto`/`yes`/`no` |
 | `AISC_ON_LIMIT` | `ask` | Action on limit: `ask`/`continue`/`skip`/`abort` |
-| `AISC_LANG` | `en` | Console language: `en`/`ru` |
+| `AISC_LANG` | `en` | Runner/UI language: `en`/`ru` |
 | `AISC_RESULTS_DIR` | `results/` | Redirect all artifacts (jobs/events/results) — tests + sandboxes |
 | `AISC_REVIEW_MIN_SCORE` | `0` | Legacy: auto-repair papers below this score (0=off) |
 | `AISC_REVIEW_FIX_ITER` | `0` | Legacy: max repair rounds (0=off) |
 | `AISC_SKELETON_TIMEOUT_MIN` | `20` | generate/skeleton baseline run_0 timeout (minutes) |
-
-### Console Config (`aiscientist.toml`)
-
-```toml
-default_module = "pipeline/run"
-default_template = ""
-default_idea = ""
-```
 
 ### Guard Limits
 
@@ -496,7 +422,7 @@ python -m pytest tests/ -q
 # With coverage
 python -m pytest tests/ --cov=ai_scientist
 
-# Console tests only
+# Runner tests only
 python -m pytest tests/test_console_smoke.py -v
 
 # Smoke test
@@ -507,15 +433,16 @@ python tests/test_smoke.py
 
 | File | Tests | Coverage |
 |------|-------|----------|
-| `test_console_smoke.py` | 40 | Console imports, registry, jobs, events, config, REPL, CLI, i18n |
-| `test_pipeline.py` | 11 | PipelineRunner stages, resume, abort |
+| `test_console_smoke.py` | 34 | Runner imports/execute_job, registry, jobs, events, CLI dispatch, i18n |
+| `test_pipeline.py` | 16 | PipelineRunner stages, resume, abort, improve loop, option wiring |
 | `test_loop_guard.py` | 10 | StageGuard failures, repeats, time budget |
-| `test_obsidian_notes.py` | 7 | Note writing, status updates, journal |
-| `test_research_quality.py` | 12 | Welch z, sanity check, seed aggregation |
+| `test_obsidian_notes.py` | 8 | Note writing, status updates, journal |
+| `test_research_quality.py` | 15 | Welch z, sanity check, seed aggregation |
 | `test_settings.py` | 7 | .env parsing, mask_secret, vault path |
 | `test_llm_and_openrouter.py` | 8 | OpenRouter catalog, JSON extraction |
+| `test_skeleton.py` | 6 | generate/skeleton: files, baseline, self-heal, validation |
 | `test_control_and_discussion.py` | 3 | Discussion session |
-| `test_smoke.py` | 10 | Imports, guard logic, Obsidian notes |
+| `test_smoke.py` | 10 | Imports, guard logic, Obsidian notes (standalone) |
 
 ### CI
 
@@ -587,7 +514,7 @@ results/
 - Daemon / background service
 - Multi-GPU parallelism
 - Citation graph / visualization
-- PDF preview in console
+- PDF preview in TUI
 - Literature-agent (autonomous)
 - "Auto-discovery" (promising new results)
 - Built-in IDE
@@ -600,14 +527,14 @@ results/
 - Full interactive model/template picker (questionary menus)
 - Resume run as separate module
 - Parallel jobs in one process
-- Obsidian panels in console
+- Obsidian panels in TUI
 
 ### Future Ideas (Not Commitments)
 
 - Bidirectional sync of jobs.jsonl with Obsidian journal
 - Autocomplete for idea/template names in `set`
 - Export report to PDF/markdown folder
-- Subscribe to guard events as console event stream
+- Subscribe to guard events as a TUI event stream
 
 ---
 
@@ -619,18 +546,18 @@ results/
 | LaTeX required for writeup/review | LOW | Graceful degradation without it |
 | Only 1 template shipped (nanoGPT_lite) | LOW | Others require manual setup |
 | No integration tests for perform_* | MEDIUM | Only pipeline-level tests |
-| `logs -f` only works in REPL | LOW | Not available in headless CLI |
+| Live log follow is TUI-only | LOW | The headless runner prints a flat event dump (no `-f`) |
 
 ---
 
 ## 17. Architecture Decisions
 
-### Why Not Textual for Console?
+### Why one interface (the TUI), and no REPL/Textual layer?
 
-1. Current UI doesn't need replacement (REPL is sufficient)
-2. MSF metaphor = REPL, not dashboard
-3. Textual in repo is disconnected and contains forbidden subsystems (StateManager, EventBus)
-4. `prompt_toolkit` + `rich` already in dependencies
+1. Two terminal UIs (REPL + dashboard) confused users about what the product *is*; the REPL was removed in beta 2.
+2. The TUI dashboard already covers jobs, logs, follow, explorer, notes and article in one place.
+3. Textual in the tree is disconnected and carries forbidden subsystems (StateManager, EventBus).
+4. The Python layer stays pure plumbing (runner + modules) so CI and the TUI share one execution path.
 
 ### Why Templates?
 
@@ -653,7 +580,7 @@ Aider generates SEARCH/REPLACE diffs, not full file writes. This is better for:
 
 See the Backlog section above for planned features. Areas welcome:
 - New research templates
-- Console module plugins
+- Runner module plugins
 - Additional model integrations
 - Documentation improvements
 - Test coverage improvements

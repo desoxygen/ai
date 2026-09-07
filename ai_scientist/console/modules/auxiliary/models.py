@@ -1,6 +1,8 @@
-"""auxiliary/models — interactive model browser and selector for OpenRouter.
+"""auxiliary/models — browse and select OpenRouter models.
 
-Provides a `models` command in the REPL to search, browse, and select models.
+Headless module invoked via the runner (`aiscientist -q search models`); the
+TUI has its own model picker. Returns the filtered catalog through the event
+stream.
 """
 import os
 

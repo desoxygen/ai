@@ -1,11 +1,12 @@
-"""Консоль-лаборатория `aiscientist` (Beta 1).
+"""Пакет `aiscientist` (Beta 2).
 
-Пакет для новой консоли в духе msfconsole. Entry point — `ai_scientist.console.cli`;
-ядро REPL — `ai_scientist.console.repl`; каталог модулей — `ai_scientist.console.modules`.
+Единственный интерфейс — TUI в `opencode-tui/`. Python-слой остаётся скрытым
+раннером: entry point `ai_scientist.console.cli` (headless run/skeleton/status/logs),
+общая логика запуска — `ai_scientist.console.runner`, каталог модулей — `ai_scientist.console.modules`.
 """
 import sys
 
-VERSION = "0.1-beta1"
+VERSION = "0.1-beta2"
 __version__ = VERSION
 
 

@@ -11,7 +11,7 @@ export const TICK_MS = 30
 
 export const CONTEXT_WINDOW = 200000
 
-export const VERSION = "0.1-beta1"
+export const VERSION = "0.1-beta2"
 
 export interface ModelInfo {
   id: string

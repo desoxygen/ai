@@ -3,14 +3,12 @@
 Thin wrapper: does not rewrite science. Passes events (emit) and stop flag
 (stop_event) to the runner; stages publish started/log/done/fail.
 
-Smoke: one idea, one stage —
-    use pipeline/run
-    set TEMPLATE nanoGPT_lite
-    set NUM_IDEAS 1
-    set STAGES ideas
-    run
+Smoke (headless, one idea one stage):
+    python -m ai_scientist.console.cli -q run --template nanoGPT_lite \
+        --num-ideas 1 --stages ideas
 
-stop — cooperative: checked at stage/idea boundaries (RunAborted).
+The TUI launches this module for `/run`. stop — cooperative: checked at
+stage/idea boundaries (RunAborted).
 """
 import os.path as osp
 

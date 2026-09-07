@@ -1,12 +1,14 @@
 """Entry point for the `aiscientist` command.
 
-  * `aiscientist`                    -> TUI (primary interface);
+The TUI (`opencode-tui/`) is the only interactive interface:
+
+  * `aiscientist`                    -> TUI (the product);
   * `aiscientist tui`                -> same, explicit;
-  * `aiscientist repl`               -> console (REPL), no TUI;
-  * `aiscientist help`               -> help;
-  * `aiscientist -q run ...`         -> headless CLI run;
-  * `aiscientist run|status|logs|search` -> CLI aliases;
+  * `aiscientist help`               -> short pointer to the TUI;
   * `aiscientist --version`          -> version.
+
+Hidden debug plumbing (not a user-facing interface — used by the TUI and CI):
+  `aiscientist -q run ... | skeleton ... | status | logs | search`
 
 Stage failure -> non-zero exit code (1 = fail, 130 = aborted).
 """
@@ -18,7 +20,7 @@ import sys
 from ai_scientist import settings
 from ai_scientist.console import VERSION, ensure_utf8_stdio
 from ai_scientist.console.i18n import get as _t, set_language
-from ai_scientist.console.repl import BANNER, HELP, format_event
+from ai_scientist.console.runner import format_event
 
 
 # --------------------------------------------------------------------------- TUI
@@ -45,8 +47,10 @@ def cli_tui(argv):
     ok, why = tui_available()
     if not ok:
         print(_t("cli_tui_unavailable", why), file=sys.stderr)
-        from ai_scientist.console.repl import main as repl_main
-        return repl_main()
+        print(f"the TUI is the only interface - see the README "
+              f"(install Bun + `bun install` in {TUI_DIRNAME}/), then run: aiscientist",
+              file=sys.stderr)
+        return 1
     os.chdir(tui_dir())
     try:
         return subprocess.call(["bun", "run", "src/index.tsx"])
@@ -54,8 +58,7 @@ def cli_tui(argv):
         return 130
     except OSError as e:
         print(_t("cli_tui_error", e), file=sys.stderr)
-        from ai_scientist.console.repl import main as repl_main
-        return repl_main()
+        return 1
 
 
 
@@ -64,7 +67,7 @@ def cli_run(argv):
     import argparse
     from ai_scientist.console.jobs import JobRegistry
     from ai_scientist.console.registry import ModuleRegistry
-    from ai_scientist.console.repl import execute_job
+    from ai_scientist.console.runner import execute_job
 
     p = argparse.ArgumentParser(prog="aiscientist run")
     p.add_argument("--template", required=True, help=_t("cli_template_help"))
@@ -103,7 +106,7 @@ def cli_skeleton(argv):
     import argparse
     from ai_scientist.console.jobs import JobRegistry
     from ai_scientist.console.registry import ModuleRegistry
-    from ai_scientist.console.repl import execute_job
+    from ai_scientist.console.runner import execute_job
 
     p = argparse.ArgumentParser(prog="aiscientist skeleton")
     p.add_argument("--name", required=True, help="new template name (lowercase, 2-48 chars)")
@@ -196,16 +199,23 @@ def main(argv=None) -> int:
         argv = argv[2:]
 
     if not argv:
-        # TUI — primary interface; REPL lives under `repl`.
+        # TUI — the only interface.
         return cli_tui([])
 
     cmd = argv[0]
     rest = argv[1:]
 
     if cmd in ("-h", "--help", "help"):
-        print(BANNER)
+        print(f"aiscientist {VERSION} — the TUI is the only interface.")
         print()
-        print(HELP)
+        print("  aiscientist            open the terminal dashboard (opencode-tui/)")
+        print("  aiscientist help       this message")
+        print("  aiscientist --version  print version")
+        print()
+        print("Headless/debug (used by the TUI and CI, not an interactive UI):")
+        print("  aiscientist -q run --template T [--stages ...] [--improve ...]")
+        print("  aiscientist -q skeleton --name N --description D")
+        print("  aiscientist status | logs [-j ID] | search QUERY")
         return 0
 
     if cmd in ("-v", "--version", "version"):
@@ -214,10 +224,6 @@ def main(argv=None) -> int:
 
     if cmd in ("tui", "ui", "dashboard"):
         return cli_tui(rest)
-
-    if cmd in ("repl", "console"):
-        from ai_scientist.console.repl import main as repl_main
-        return repl_main()
 
     # CLI aliases work with relative templates/results — fix cwd.
     os.chdir(settings.PROJECT_ROOT)

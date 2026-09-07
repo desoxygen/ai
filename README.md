@@ -1,10 +1,10 @@
 <h1 align="center">
   <a href="https://github.com/SakanaAI/AI-Scientist/blob/main/docs/logo_2.png">
     <img src="docs/logo_2.png" width="220" alt="The AI Scientist" /></a><br>
-  <b>The AI Scientist — Console Edition</b><br>
+  <b>The AI Scientist — TUI Edition</b><br>
   <sub>Automated Scientific Discovery, from a terminal.</sub><br><br>
   <a href="https://github.com/desoxygen/ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/desoxygen/ai/ci.yml?label=CI&logo=github" alt="CI"></a>
-  <a href="https://github.com/desoxygen/ai/releases/tag/v0.1-beta1"><img src="https://img.shields.io/github/v/tag/desoxygen/ai?label=version&color=orange" alt="v0.1-beta1"></a>
+  <a href="https://github.com/desoxygen/ai/releases/tag/v0.1-beta2"><img src="https://img.shields.io/github/v/tag/desoxygen/ai?label=version&color=orange" alt="v0.1-beta2"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=yellow" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/tests-196%20passing-brightgreen" alt="tests">
   <a href="https://arxiv.org/abs/2408.06292"><img src="https://img.shields.io/badge/paper-arXiv%202408.06292-b31b1b?logo=arxiv&logoColor=white" alt="Paper"></a>
@@ -14,9 +14,8 @@
 <p align="center">
   <a href="#quickstart">Quickstart</a> •
   <a href="#what-you-get">What you get</a> •
-  <a href="#the-console">Console</a> •
-  <a href="#the-tui">TUI</a> •
-  <a href="#cli-reference">CLI</a> •
+  <a href="#the-tui--the-only-interface">TUI</a> •
+  <a href="#configuration">Configuration</a> •
   <a href="#beta-testing">Beta</a> •
   <a href="docs/BETA0.1.md">Docs</a>
 </p>
@@ -29,9 +28,9 @@ code agent, writes a LaTeX paper, reviews it like a conference referee — and
 now, **revises the paper from its own review** until it clears the bar.
 
 This fork turns the research loop into a **product you can actually run**:
-a dark-mode terminal dashboard (TUI), an msfconsole-style REPL, and a
-headless CLI for CI — with guard rails, event streams, reproducible run
-metadata and a research journal written to Obsidian on the way.
+one dark-mode terminal dashboard — **the TUI** — with guard rails, event
+streams, reproducible run metadata and a research journal written to Obsidian
+along the way.
 
 ```
  ideas ──▶ novelty ──▶ experiments ──▶ writeup ──▶ review ──┐
@@ -63,7 +62,7 @@ python -m venv .venv && .venv\Scripts\activate   # Windows (source .venv/bin/act
 pip install -e .                                 # Python 3.11+
 
 cp .env.example .env                             # put your OPENROUTER_API_KEY inside
-aiscientist                                      # 🖥  opens the TUI (REPL if bun is absent)
+aiscientist                                      # 🖥  that's the whole interface — the TUI
 ```
 
 Prefer Docker (includes LaTeX, network-restricted):
@@ -76,22 +75,10 @@ docker compose build && docker compose run --rm scientist
 > `improve`). Without it the pipeline still runs ideas → experiments and
 > degrades gracefully. Headless: `sudo apt-get install texlive-full chktex`.
 
-## The console
+## The TUI — the only interface
 
-`aiscientist` (no args) launches the **TUI**; `aiscientist repl` the
-msfconsole-style REPL. In the REPL:
-
-```
-aiscientist > use pipeline/run
-aiscientist > set TEMPLATE nanoGPT_lite
-aiscientist > set IMPROVE on
-aiscientist > set IMPROVE_MIN_SCORE 6
-aiscientist > run                     # watch guarded stages live
-aiscientist > logs -f                 # event stream
-aiscientist > loot                    # paper PDF, review, metrics
-```
-
-The doom-style start menu gives you one-keystroke access:
+`aiscientist` opens the terminal dashboard. The doom-style start menu gives
+one-keystroke access (prompt empty):
 
 | Shift+key | Action | Shift+key | Action |
 |---|---|---|---|
@@ -99,8 +86,6 @@ The doom-style start menu gives you one-keystroke access:
 | `P` | open project | `D` | dashboard |
 | `N` | new-project wizard | `A` | auto-improve preset |
 | `M` | **AI skeleton** (new) | `I` | `/init` project rules |
-
-## The TUI
 
 Six workspaces (`1`–`6`), a command palette (`ctrl+p`), leader keys
 (`ctrl+x`) and slash commands:
@@ -118,65 +103,56 @@ The Dashboard follows real jobs (stages, event rate sparklines, live log),
 Chat delegates background workers, Notes browses ideas/Obsidian, Article
 renders the generated paper as ANSI text.
 
-## CLI reference
+## Configuration
 
-```bash
-aiscientist run --template nanoGPT_lite --idea adaptive_block_size \
-  --stages ideas,novelty,experiments,writeup,review \
-  --improve --min-score 6 --rounds 2
+Key settings in `.env` (full table: [docs/BETA0.1.md §9](docs/BETA0.1.md)):
 
-aiscientist skeleton --name my_study \
-  --description "Compare LR schedules on a tiny transformer"   # + run_0 baseline
+| Variable | Purpose |
+|---|---|
+| `OPENROUTER_API_KEY` | model access (also `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) |
+| `AISC_DEFAULT_MODEL` | which model drives the pipeline |
+| `AISC_RESULTS_DIR` | redirect all artifacts (tests / sandboxes) |
+| `AISC_SEED` / `AISC_EXP_SEEDS` | reproducibility |
+| `AISC_MAX_STAGE_MINUTES` | per-stage time budget |
 
-aiscientist status          # job board
-aiscientist logs -j 5       # event stream of a job
-aiscientist search pipeline # module catalog
-```
-
-| Exit code | Meaning | | Env (`.env`) | |
-|---|---|---|---|---|
-| `0` | success | | `OPENROUTER_API_KEY` | model access |
-| `1` | stage failed | | `AISC_DEFAULT_MODEL` | default model |
-| `130` | aborted (`stop` / ctrl-c) | | `AISC_RESULTS_DIR` | redirect artifacts |
-| | | | `AISC_SEED` / `AISC_EXP_SEEDS` | reproducibility |
-| | | | `AISC_MAX_STAGE_MINUTES` | time budgets |
-
-Full table: [docs/BETA0.1.md §9](docs/BETA0.1.md).
+> There is no interactive command line to learn. A **headless runner** powers
+> the TUI under the hood; it exists for CI and debugging only, and is
+> documented — deliberately out of sight — in [`docs/DEBUG.md`](docs/DEBUG.md).
 
 ## Project layout
 
 ```
 ai_scientist/
-├── console/           # entry point, REPL, module registry, jobs, events, i18n (EN/RU)
+├── console/           # entry point, headless runner, module registry, jobs, events, i18n
 │   └── modules/       # pipeline/run · generate/skeleton · auxiliary/* · report/last
 ├── pipeline.py        # PipelineRunner: guarded stages + improve loop
 ├── perform_*.py       # experiments (Aider), writeup (LaTeX), review
 └── ...
-opencode-tui/          # Bun + React terminal dashboard
+opencode-tui/          # the TUI — Bun + React terminal dashboard (the only UI)
 templates/nanoGPT_lite # ships ready-to-run (baseline included)
-docs/                  # BETA0.1.md (single source of truth) + release notes
+docs/                  # BETA0.1.md (source of truth) · DEBUG.md · release notes
 ```
 
 ## Safety
 
 > **Warning.** The pipeline executes LLM-generated code. Run it in Docker or
 > another sandbox, not on a machine you love. Stage guards cap iterations,
-> repeated outputs and wall-clock per stage; interactive mode asks before
-> continuing past a limit.
+> repeated outputs and per-stage wall-clock time.
 
-## Beta testing — v0.1-beta1
+## Beta testing — v0.1-beta2
 
-1. `aiscientist` → Shift+R on `nanoGPT_lite` → watch the full loop, enable **A** for the improve pass.
+1. `aiscientist` → Shift+R on `nanoGPT_lite` → watch the full loop, press **A** to enable the improve pass.
 2. Shift+N → wizard → step 5/6 **AI skeleton: y** → a new domain becomes runnable end-to-end.
 3. Broken? `/report <jobId>` + `/export` and [open an issue](https://github.com/desoxygen/ai/issues) with the digest.
 
-Release notes: [docs/RELEASE-v0.1-beta1.md](docs/RELEASE-v0.1-beta1.md).
+Release notes: [docs/RELEASE-v0.1-beta2.md](docs/RELEASE-v0.1-beta2.md).
 
 ## Contributing & docs
 
 The living spec is [`docs/BETA0.1.md`](docs/BETA0.1.md) (architecture, event
-contract, backlog). Welcome: new research templates, console modules, model
-providers, docs and tests.
+contract, backlog); the hidden headless runner is documented in
+[`docs/DEBUG.md`](docs/DEBUG.md). Welcome: new research templates, runner
+modules, model providers, docs and tests.
 
 ## License & citation
 
