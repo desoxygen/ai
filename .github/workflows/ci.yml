@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: opencode-tui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
@@ -25,6 +25,7 @@ jobs:
           AISC_TUI_OFFLINE: "1"
           AISC_AGENTS_DIR: ${{ runner.temp }}/ais-agents-ci
           AISC_SESSIONS_DIR: ${{ runner.temp }}/ais-sessions-ci
+          AISC_RESULTS_DIR: ${{ runner.temp }}/ais-results-ci
 
   python:
     strategy:
@@ -33,12 +34,14 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install -q -r requirements.txt pytest
+      # exactly the README quickstart path — CI must test what users install
+      - run: pip install -e . && pip install -r requirements-dev.txt
       - run: python -m pytest tests/ -q
         env:
           AISC_TUI_OFFLINE: "1"
+          AISC_RESULTS_DIR: ${{ runner.temp }}/ais-results-ci
           OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault

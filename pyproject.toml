@@ -23,10 +23,13 @@ dependencies = [
   "pypdf",
   "pymupdf4llm",
   "torch",
-  "numpy",
-  "transformers",
-  "datasets",
-  "tiktoken",
+  # Floors below keep pip's resolver out of pre-cp312 sdists (numpy 1.24.3,
+  # tiktoken 0.4.0, aiohttp 3.8.4) that aider-chat backtracking otherwise picks
+  "numpy>=1.26",
+  "transformers>=4.40",
+  "datasets>=2.18",
+  "tiktoken>=0.5",
+  "aiohttp>=3.9",
   "wandb",
   "tqdm",
 ]
