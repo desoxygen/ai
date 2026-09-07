@@ -1,0 +1,5 @@
+# Дефолты консоли aiscientist (Beta 1).
+# Ключ и модель — в .env (см. .env.example); это не секреты.
+default_module = "pipeline/run"
+default_template = ""        # пусто = первый шаблон из templates/
+default_idea = ""            # пусто = без фильтра по идее

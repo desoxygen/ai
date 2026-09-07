@@ -1,0 +1,37 @@
+# AI-Scientist — docker compose.
+#
+#   TUI:            docker compose run --rm scientist
+#   CLI-запуск:     docker compose run --rm scientist run --template nanoGPT_lite --stages ideas
+#   Тесты:          docker compose run --rm --entrypoint python scientist -m pytest tests/
+#
+# Before first run:
+#   1. cp .env.example .env  and fill in API keys
+#   2. Set VAULT_PATH below to your Obsidian vault (or leave empty to skip)
+#
+services:
+  scientist:
+    build: .
+    image: ai-scientist-deck:latest
+    env_file: .env
+    environment:
+      OBSIDIAN_VAULT_PATH: /obsidian/vault
+      AISC_INTERACTIVE: auto
+    volumes:
+      - ./templates:/app/templates
+      - ./results:/app/results
+      - ./data:/app/data
+      # Set your vault path here (Windows: C:/Users/<you>/Documents/MyVault)
+      # or leave commented to run without Obsidian integration.
+      # - ${VAULT_PATH:-/dev/null}:/obsidian/vault
+    stdin_open: true
+    tty: true
+    user: "1000:1000"
+    command: []
+    # GPU (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tui:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: opencode-tui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test --timeout 20000
+        env:
+          AISC_TUI_OFFLINE: "1"
+          AISC_AGENTS_DIR: ${{ runner.temp }}/ais-agents-ci
+          AISC_SESSIONS_DIR: ${{ runner.temp }}/ais-sessions-ci
+
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r requirements.txt pytest
+      - run: python -m pytest tests/ -q
+        env:
+          AISC_TUI_OFFLINE: "1"
+          OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault

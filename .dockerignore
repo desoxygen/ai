@@ -1,0 +1,16 @@
+.git
+.gitignore
+results/
+**/__pycache__
+*.pyc
+.idea
+.vscode
+docs/
+example_papers/
+review_ai_scientist/
+review_iclr_bench/
+experimental/
+Dockerfile
+docker-compose.yml
+.dockerignore
+opencode-tui/

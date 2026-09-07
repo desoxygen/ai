@@ -1,0 +1,15 @@
+# Learnings — what was already tried
+
+- 2026-09-05 15:13 · **good_idea** → reviewed
+- 2026-09-05 15:45 · **good_idea** → reviewed
+- 2026-09-05 17:39 · **good_idea** → reviewed
+- 2026-09-06 11:50 · **good_idea** → reviewed
+- 2026-09-06 12:26 · **good_idea** → reviewed
+- 2026-09-06 12:26 · **good_idea** → reviewed
+- 2026-09-06 12:27 · **good_idea** → reviewed
+- 2026-09-06 14:08 · **good_idea** → reviewed
+- 2026-09-06 15:13 · **good_idea** → reviewed
+- 2026-09-06 15:28 · **good_idea** → reviewed
+- 2026-09-06 15:33 · **good_idea** → reviewed
+- 2026-09-07 10:59 · **good_idea** → reviewed
+- 2026-09-07 11:48 · **good_idea** → reviewed

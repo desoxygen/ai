@@ -1,0 +1,23 @@
+# LLM APIs
+anthropic
+aider-chat
+backoff
+openai
+google-generativeai
+requests
+# Console / REPL
+rich
+questionary
+prompt_toolkit
+# Viz
+matplotlib
+pypdf
+pymupdf4llm
+# Common Requirements
+torch
+numpy
+transformers
+datasets
+tiktoken
+wandb
+tqdm
