@@ -14,12 +14,15 @@ process.env.AISC_TUI_OFFLINE = "1"
 const tmpAgents = mkdtempSync(join(tmpdir(), "ais-agents-test-"))
 const tmpSessions = mkdtempSync(join(tmpdir(), "ais-sessions-test-"))
 const tmpResults = mkdtempSync(join(tmpdir(), "ais-results-test-"))
+const tmpVault = mkdtempSync(join(tmpdir(), "ais-vault-test-"))
 // set in beforeAll: bun may evaluate several files before running tests, so
 // module-level assignment lets the last-loaded file win for ALL of them
 beforeAll(() => {
   process.env.AISC_AGENTS_DIR = tmpAgents
   process.env.AISC_SESSIONS_DIR = tmpSessions
   process.env.AISC_RESULTS_DIR = tmpResults
+  // Notes must never depend on the developer's real .env having a vault
+  process.env.OBSIDIAN_VAULT_PATH = tmpVault
 })
 
 const STATE = join(import.meta.dir, "..", "state.json")
@@ -421,7 +424,7 @@ test("workspaces cycle: dashboard first, explorer shows the tree", async () => {
     expect(dash).toContain("▦ experiments")
     setup.mockInput.pressTab()
     const expl = await frameUntil(setup, (f) => f.includes("▮ 3 Explorer"))
-    expect(expl).toContain("AI-Scientist")
+    expect(expl).toContain("ai_scientist")
     setup.mockInput.pressKey("2")
     const home = await toChat(setup)
     expect(home).toContain("Explorer")
@@ -443,7 +446,7 @@ test("explorer right pane previews the selected entry", async () => {
     await setup.renderOnce()
     setup.mockInput.pressKey("3")
     const ex = await frameUntil(setup, (f) => f.includes("▮ 3 Explorer") && f.includes("entries"))
-    expect(ex).toContain("AI-Scientist")
+    expect(ex).toContain("ai_scientist")
     expect(ex).toContain("ai_scientist/")
     expect(ex).toContain("README.md")
   } finally {
@@ -723,7 +726,7 @@ test("Explorer enter suspends TUI, hands TTY to $EDITOR, resumes with file edite
 afterAll(() => {
   if (existsSync(STATE)) rmSync(STATE)
   delete process.env.AISC_TUI_OFFLINE
-  for (const d of [tmpAgents, tmpSessions, tmpResults]) rmSync(d, { recursive: true, force: true })
+  for (const d of [tmpAgents, tmpSessions, tmpResults, tmpVault]) rmSync(d, { recursive: true, force: true })
 })
 
 
