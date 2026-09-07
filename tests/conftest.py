@@ -21,6 +21,14 @@ def tmp_vault(tmp_path, monkeypatch):
     return vault
 
 
+@pytest.fixture(autouse=True)
+def no_template_writes(monkeypatch):
+    """run_idea() writes learnings to the relative templates/<t>/learnings.md —
+    in the real repo that leaked a test row on every pipeline test run."""
+    from ai_scientist import pipeline as _pl
+    monkeypatch.setattr(_pl, "append_learning", lambda *a, **k: "")
+
+
 @pytest.fixture()
 def headless(monkeypatch):
     """Headless guard policy: skip on limit without prompting."""
