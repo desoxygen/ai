@@ -31,6 +31,7 @@ export function HomeScreen({
   onGoDashboard,
   improveLabel,
   onPickImprove,
+  onPickSkeleton,
   consult,
   busy,
   thinking,
@@ -62,6 +63,7 @@ export function HomeScreen({
   onGoDashboard: () => void
   improveLabel: string
   onPickImprove: () => void
+  onPickSkeleton: () => void
   consult: { q: string; a: string; running: boolean } | null
   busy: boolean
   thinking: string | null
@@ -93,6 +95,7 @@ export function HomeScreen({
     { key: "R", label: "run pipeline", hint: project ? `/run ${project.name}` : "/run <template>", run: onRunProject },
     { key: "D", label: "dashboard", hint: "1 — experiments, agents, article", run: onGoDashboard },
     { key: "A", label: "auto-improve", hint: improveLabel === "off" ? "off — /improve to pick a preset" : improveLabel, run: onPickImprove },
+    { key: "M", label: "AI skeleton", hint: "generate experiment.py + plot.py + baseline for a project", run: onPickSkeleton },
     { key: "I", label: "AGENTS.md", hint: "/init — bootstrap project context", run: () => onSend("/init") },
   ]
 

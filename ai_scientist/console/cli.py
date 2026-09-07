@@ -99,6 +99,32 @@ def cli_run(argv):
     return execute_job(mod, options, jobs, printer=_print_event)
 
 
+def cli_skeleton(argv):
+    import argparse
+    from ai_scientist.console.jobs import JobRegistry
+    from ai_scientist.console.registry import ModuleRegistry
+    from ai_scientist.console.repl import execute_job
+
+    p = argparse.ArgumentParser(prog="aiscientist skeleton")
+    p.add_argument("--name", required=True, help="new template name (lowercase, 2-48 chars)")
+    p.add_argument("--description", required=True, help="research task description")
+    p.add_argument("--model", default="", help=_t("cli_model_help"))
+    p.add_argument("--no-baseline", action="store_true",
+                   help="write the skeleton without running the baseline")
+    a = p.parse_args(argv)
+
+    mod = ModuleRegistry().get("generate/skeleton")
+    if mod is None:
+        print(_t("cli_module_not_found"), file=sys.stderr)
+        return 1
+    options = {
+        "NAME": a.name, "DESCRIPTION": a.description, "MODEL": a.model,
+        "RUN_BASELINE": "off" if a.no_baseline else "on",
+    }
+    jobs = JobRegistry()
+    return execute_job(mod, options, jobs, printer=_print_event)
+
+
 def cli_status(argv):
     from ai_scientist.console.jobs import JobRegistry
     jobs = JobRegistry()
@@ -198,6 +224,8 @@ def main(argv=None) -> int:
 
     if cmd == "run":
         return cli_run(rest)
+    if cmd in ("skeleton", "generate-skeleton"):
+        return cli_skeleton(rest)
     if cmd == "status":
         return cli_status(rest)
     if cmd == "logs":

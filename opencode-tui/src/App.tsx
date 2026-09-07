@@ -21,7 +21,7 @@ import { Explorer } from "./components/Explorer.tsx"
 import { NotesBoard, type NotePrompt } from "./components/NotesBoard.tsx"
 import { AgentsWorkspace } from "./components/AgentsWorkspace.tsx"
 import { createResponse, type AgentEvent } from "./lib/agent.ts"
-import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startRun as startAisRun, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
+import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startRun as startAisRun, startSkeleton as startAisSkeleton, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
 import { apiKey, chatComplete, llmBlockedReason, llmReady, resolveModel, pipelineModel, streamChat, cachedModels, fetchModels, activeRouterId, hasEnv, routerLabel, setActiveRouter, ROUTERS, type ChatMsg } from "./lib/llm.ts"
 import { createProject, validateName, type NewProjectInput } from "./lib/newproject.ts"
 import { generateAgentsMd } from "./lib/initmd.ts"
@@ -84,7 +84,7 @@ function realCost(): number {
   return ((realUsage.in + realUsage.out) / 1e6) * PRICE_PER_MTOK
 }
 
-type DlgKind = "palette" | "model" | "theme" | "effect" | "sessions" | "agents" | "history" | "aisjobs" | "projects" | "routers" | "notecolor" | "improve"
+type DlgKind = "palette" | "model" | "theme" | "effect" | "sessions" | "agents" | "history" | "aisjobs" | "projects" | "routers" | "notecolor" | "improve" | "skeleton"
 
 const IMPROVE_PRESETS: { val: string; label: string; desc: string }[] = [
   { val: "off", label: "off", desc: "review once — no repair rounds" },
@@ -109,12 +109,29 @@ export function improveLabel(cfg: string): string {
   return m ? `on · ≥${m[1]} ×${m[2]}` : "off"
 }
 
+/** What the skeleton generator should research: prompt.json task + the first seed idea. */
+function skeletonDescFor(root: string, name: string): string {
+  try {
+    const p = JSON.parse(readFileSync(join(root, "templates", name, "prompt.json"), "utf8")) as { task_description?: string }
+    const sp = join(root, "templates", name, "seed_ideas.json")
+    let idea = ""
+    if (existsSync(sp)) {
+      const seeds = JSON.parse(readFileSync(sp, "utf8")) as { Experiment?: string; Title?: string }[]
+      if (Array.isArray(seeds) && seeds[0]) idea = `\nSeed idea: ${seeds[0].Experiment || seeds[0].Title || ""}`
+    }
+    return `${p.task_description ?? ""}${idea}`.trim()
+  } catch {
+    return ""
+  }
+}
+
 interface NewProjectState {
-  step: "name" | "desc" | "idea" | "system" | "confirm"
+  step: "name" | "desc" | "idea" | "system" | "skeleton" | "confirm"
   name: string
   desc: string
   idea: string
   system: string
+  skeleton: boolean
   error?: string
 }
 
@@ -1353,8 +1370,29 @@ export function App() {
 
   const handleCommandRef = useRef<(cmd: string) => boolean>(() => false)
 
+  const doSkeleton = useCallback(
+    async (name: string, description: string) => {
+      const prevMax = store.jobs.reduce((m, j) => Math.max(m, j.id), 0)
+      const h = startAisSkeleton({ name, description })
+      pushStatic(`AI skeleton queued for «${name}» — the model writes experiment.py + plot.py and runs the run_0 baseline; progress lands on the Agents board (tab 5).\n`, "run")
+      h.child.on("error", (e) => showToast(`spawn failed: ${String((e as Error).message ?? e)} — set $AISC_PYTHON`, "err"))
+      const jid = await waitJobId(prevMax)
+      if (jid === -1) {
+        showToast("no skeleton job appeared in results/jobs.jsonl", "warn")
+        return
+      }
+      ownJobsRef.current.add(jid)
+      lastSeenRef.current.set(jid, 0)
+      handlesRef.current.set(jid, h)
+      h.child.on("close", () => handlesRef.current.delete(jid))
+      store.refresh()
+      showToast(`skeleton job #${jid} attached`, "ok")
+    },
+    [pushStatic, showToast, store],
+  )
+
   const startWizard = useCallback(() => {
-    setNpBoth({ step: "name", name: "", desc: "", idea: "", system: "", error: undefined })
+    setNpBoth({ step: "name", name: "", desc: "", idea: "", system: "", skeleton: true, error: undefined })
   }, [setNpBoth])
 
   const finishProjectCreation = useCallback(() => {
@@ -1368,16 +1406,24 @@ export function App() {
     setNpBoth(null)
     refreshProjects()
     selectProject(cur.name)
-    pushStatic(
-      `Project «${cur.name}» created at templates/${cur.name}/ — wrote ${res.files.join(", ")}.\n` +
-        (res.missing.length
-          ? `Still missing for experiments: ${res.missing.join(", ")} — copy a skeleton from any sibling template under templates/ (press P to browse).\n`
-          : "") +
-        `Next: edit the seed idea if needed (/editor), then start the pipeline with /run ${cur.name} or press r on the research menu.\n`,
-      "project",
-    )
-    showToast(`project «${cur.name}» created`, "ok")
-  }, [pushStatic, refreshProjects, selectProject, setNpBoth, showToast])
+    if (cur.skeleton) {
+      pushStatic(
+        `Project «${cur.name}» created at templates/${cur.name}/ — wrote ${res.files.join(", ")}.\n`,
+        "project",
+      )
+      void doSkeleton(cur.name, `${cur.desc}\nSeed idea: ${cur.idea}`)
+    } else {
+      pushStatic(
+        `Project «${cur.name}» created at templates/${cur.name}/ — wrote ${res.files.join(", ")}.\n` +
+          (res.missing.length
+            ? `Still missing for experiments: ${res.missing.join(", ")} — run /skeleton ${cur.name} to have the model generate them, or copy from a sibling template (press P to browse).\n`
+            : "") +
+          `Next: edit the seed idea if needed (/editor), then start the pipeline with /run ${cur.name} or press r on the research menu.\n`,
+        "project",
+      )
+      showToast(`project «${cur.name}» created`, "ok")
+    }
+  }, [doSkeleton, pushStatic, refreshProjects, selectProject, setNpBoth, showToast])
 
   const npEnter = useCallback(() => {
     const cur = npRef.current
@@ -1413,7 +1459,10 @@ export function App() {
         return
       }
       case "system":
-        setNpBoth({ ...cur, system: strip(cur.system), error: undefined, step: "confirm" })
+        setNpBoth({ ...cur, system: strip(cur.system), error: undefined, step: "skeleton" })
+        return
+      case "skeleton":
+        setNpBoth({ ...cur, error: undefined, step: "confirm" })
         return
       case "confirm":
         finishProjectCreation()
@@ -1429,7 +1478,8 @@ export function App() {
       desc: "name",
       idea: "desc",
       system: "idea",
-      confirm: "system",
+      skeleton: "system",
+      confirm: "skeleton",
     }
     const prev = back[cur.step]
     if (prev === null) setNpBoth(null)
@@ -1439,7 +1489,7 @@ export function App() {
   const npAppend = useCallback(
     (ch: string) => {
       const cur = npRef.current
-      if (!cur || cur.step === "confirm") return
+      if (!cur || cur.step === "confirm" || cur.step === "skeleton") return
       setNpBoth({ ...cur, [cur.step]: cur[cur.step] + ch, error: undefined })
     },
     [setNpBoth],
@@ -1447,7 +1497,7 @@ export function App() {
 
   const npBackspace = useCallback(() => {
     const cur = npRef.current
-    if (!cur || cur.step === "confirm") return
+    if (!cur || cur.step === "confirm" || cur.step === "skeleton") return
     setNpBoth({ ...cur, [cur.step]: cur[cur.step].slice(0, -1), error: undefined })
   }, [setNpBoth])
 
@@ -1746,6 +1796,24 @@ export function App() {
           void doRun(args[0], args.includes("--model") ? args[args.indexOf("--model") + 1] : undefined, improveForRun)
           return true
         }
+        case "skeleton": {
+          if (!args.length) {
+            open("skeleton", 0)
+            return true
+          }
+          const nm = args[0]
+          const tdir = join(PROJECT_ROOT, "templates", nm)
+          if (!existsSync(tdir)) {
+            pushStatic(`no such project: ${nm} — available: ${listProjects().join(", ")}\n`, "error")
+            return true
+          }
+          if (existsSync(join(tdir, "experiment.py"))) {
+            pushStatic(`project «${nm}» already has experiment.py — /skeleton only fills in missing skeletons\n`, "error")
+            return true
+          }
+          void doSkeleton(nm, skeletonDescFor(PROJECT_ROOT, nm) || projectDescription(nm))
+          return true
+        }
         case "improve": {
           const val = args.join(" ")
           if (!val) {
@@ -1983,6 +2051,7 @@ export function App() {
       cwd,
       delegateTask,
       doCompact,
+      doSkeleton,
       doRun,
       exportSession,
       msgs,
@@ -2189,6 +2258,16 @@ export function App() {
             showToast(`auto-improve: ${improveLabel(p.val)}`, "ok")
           },
         }))
+      if (kind === "skeleton")
+        return projectsList
+          .filter((t) => !existsSync(join(PROJECT_ROOT, "templates", t, "experiment.py")))
+          .map((t) => ({
+            name: t,
+            desc: projectDescription(t) || "no task description yet",
+            category: "Needs skeleton",
+            hint: "generate",
+            run: () => void doSkeleton(t, skeletonDescFor(PROJECT_ROOT, t) || projectDescription(t)),
+          }))
       if (kind === "notecolor")
         return LABELS.map((l) => ({
           name: l.name,
@@ -2228,7 +2307,7 @@ export function App() {
       }))
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agentIndex, applyEffect, changeTheme, modelIndex, projectName, projectsList, selectProject, selectRouter, sessionList, showToast, store, switchSession, themeName],
+    [agentIndex, applyEffect, changeTheme, doSkeleton, modelIndex, projectName, projectsList, selectProject, selectRouter, sessionList, showToast, store, switchSession, themeName],
   )
 
   const dlgFiltered: FuzzyItem<DlgEntry>[] = useMemo(() => {
@@ -2344,6 +2423,9 @@ export function App() {
         case "improve":
           openDialog("improve", 0)
           break
+        case "skeleton":
+          openDialog("skeleton", 0)
+          break
         case "agentboard":
           setWs("agents")
           setStarted(true)
@@ -2423,7 +2505,12 @@ export function App() {
 
     const wiz = npRef.current
     if (wiz) {
-      if (wiz.step === "confirm") {
+      if (wiz.step === "skeleton") {
+        if (k.name === "y") setNpBoth({ ...wiz, skeleton: true, step: "confirm", error: undefined })
+        else if (k.name === "n") setNpBoth({ ...wiz, skeleton: false, step: "confirm", error: undefined })
+        else if (k.name === "return" || k.name === "enter" || k.name === "KPEnter") npEnter()
+        else if (k.name === "escape" || k.name === "backspace") npEscape()
+      } else if (wiz.step === "confirm") {
         if (k.name === "y" || k.name === "return" || k.name === "enter" || k.name === "KPEnter") npEnter()
         else if (k.name === "n" || k.name === "escape") npEscape()
       } else if (k.name === "escape") npEscape()
@@ -2528,6 +2615,16 @@ export function App() {
       }
       if (k.name === "i") {
         handleCommandRef.current("/init")
+        k.preventDefault()
+        return
+      }
+      if (k.name === "a") {
+        openDialog("improve", 0)
+        k.preventDefault()
+        return
+      }
+      if (k.name === "m") {
+        openDialog("skeleton", 0)
         k.preventDefault()
         return
       }
@@ -3043,6 +3140,7 @@ export function App() {
     },
     improveLabel: improveLabel(settings.improve),
     onPickImprove: () => openDialog("improve", 0),
+    onPickSkeleton: () => openDialog("skeleton", 0),
     workers: orchState.workers,
     now,
     animations: anim,
@@ -3064,6 +3162,7 @@ export function App() {
     routers: "Select LLM router",
     notecolor: "Note color",
     improve: "Auto-improve papers",
+    skeleton: "Generate AI skeleton",
   }
 
   if (size.w < 58 || size.h < 12) {
@@ -3456,17 +3555,18 @@ const NP_FIELDS: Record<string, { label: string; hint: string }> = {
 }
 
 function NpWizard({ np, width }: { np: NewProjectState; width: number }) {
-  const order = ["name", "desc", "idea", "system", "confirm"] as const
+  const order = ["name", "desc", "idea", "system", "skeleton", "confirm"] as const
   const idx = order.indexOf(np.step)
-  const cur = np.step === "confirm" ? null : np[np.step]
+  const isText = np.step === "name" || np.step === "desc" || np.step === "idea" || np.step === "system"
+  const cur = np.step === "name" || np.step === "desc" || np.step === "idea" || np.step === "system" ? np[np.step] : null
   const prompt =
-    np.step === "confirm"
+    np.step === "confirm" || np.step === "skeleton"
       ? ""
       : `${NP_FIELDS[np.step].label}: `
   const preview = (s: string, n = 64) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
   return (
     <Dialog title={`new project — step ${idx + 1}/${order.length}`} escHint="esc = back · enter = next" width={width}>
-      {np.step !== "confirm" && (
+      {isText && (
         <>
           <text>
             <b fg={C.primary}>{prompt}</b>
@@ -3475,6 +3575,20 @@ function NpWizard({ np, width }: { np: NewProjectState; width: number }) {
           </text>
           <text>
             <span fg={C.dim}>{`  ${NP_FIELDS[np.step].hint}`}</span>
+          </text>
+        </>
+      )}
+      {np.step === "skeleton" && (
+        <>
+          <text>
+            <b fg={C.primary}>{"  AI skeleton?"}</b>
+            <span fg={C.text}>{`  current: ${np.skeleton ? "yes" : "no (write prompt.json/seed_ideas.json only)"}`}</span>
+          </text>
+          <text>
+            <span fg={C.dim}>{"  y — the model generates experiment.py + plot.py and runs the run_0 baseline"}</span>
+          </text>
+          <text>
+            <span fg={C.dim}>{"  n — plain project (you can run /skeleton later) · esc — back"}</span>
           </text>
         </>
       )}
@@ -3495,6 +3609,10 @@ function NpWizard({ np, width }: { np: NewProjectState; width: number }) {
           <text>
             <span fg={C.faint}>{`persona `}</span>
             <span fg={C.text}>{np.system ? preview(np.system) : "default (ambitious AI PhD student)"}</span>
+          </text>
+          <text>
+            <span fg={C.faint}>{`skeleton`}</span>
+            <span fg={np.skeleton ? C.ok : C.dim}>{np.skeleton ? "AI experiment.py + plot.py + run_0 baseline" : "skip — /skeleton <name> later"}</span>
           </text>
           <box marginTop={1}>
             <text>
