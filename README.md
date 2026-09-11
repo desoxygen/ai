@@ -1,56 +1,69 @@
-<h1 align="center">
-  <a href="https://github.com/SakanaAI/AI-Scientist/blob/main/docs/logo_2.png">
-    <img src="docs/logo_2.png" width="220" alt="The AI Scientist" /></a><br>
-  <b>The AI Scientist — TUI Edition</b><br>
-  <sub>Automated Scientific Discovery, from a terminal.</sub><br><br>
-  <a href="https://github.com/desoxygen/ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/desoxygen/ai/ci.yml?label=CI&logo=github" alt="CI"></a>
-  <a href="https://github.com/desoxygen/ai/releases/tag/v0.1-beta2"><img src="https://img.shields.io/github/v/tag/desoxygen/ai?label=version&color=orange" alt="v0.1-beta2"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=yellow" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/tests-196%20passing-brightgreen" alt="tests">
-  <a href="https://arxiv.org/abs/2408.06292"><img src="https://img.shields.io/badge/paper-arXiv%202408.06292-b31b1b?logo=arxiv&logoColor=white" alt="Paper"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AI%20Scientist%20Source%20Code-darkgray" alt="License"></a>
-</h1>
+```text
+╭─ ai-scientist · v0.2-beta3 · dark-mode research TUI ────────────────────────╮╮
+│  ███  ███            █████  ████ ███  █████ █   █ █████ ███  █████ █████     │
+│  ██ ██  █             ██    ██     █   ██    ██  █   █    █   ██      █      │
+│  █████  █              ███  ██     █   ████  █ █ █   █    █    ███    █      │
+│  ██ ██  █                ██ ██     █   ██    █  ██   █    █      ██   █      │
+│  ██ ██ ███            █████  ████ ███  █████ █   █   █   ███  █████   █      │
+│                                                                              │
+│  Automated scientific discovery, from a terminal.                            │
+│                                                                              │
+│  ideas ─▶ novelty ─▶ experiments ─▶ writeup ─▶ review ─┐                     │
+│    ▲                                                  │ score < min          │
+│    └─ learnings ◀── improve (revise from feedback) ◀───┘                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
 <p align="center">
-  <a href="#quickstart">Quickstart</a> •
-  <a href="#what-you-get">What you get</a> •
-  <a href="#the-tui--the-only-interface">TUI</a> •
-  <a href="#configuration">Configuration</a> •
-  <a href="#beta-testing">Beta</a> •
-  <a href="docs/BETA0.1.md">Docs</a>
+  <a href="https://github.com/desoxygen/ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/desoxygen/ai/ci.yml?label=CI&logo=github" alt="CI"></a>
+  <a href="https://github.com/desoxygen/ai/releases/tag/v0.2-beta3"><img src="https://img.shields.io/github/v/tag/desoxygen/ai?label=version&color=orange" alt="v0.2-beta3"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=yellow" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/tests-248%20passing-brightgreen" alt="tests">
+  <a href="https://arxiv.org/abs/2408.06292"><img src="https://img.shields.io/badge/paper-arXiv%202408.06292-b31b1b?logo=arxiv&logoColor=white" alt="Paper"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AI%20Scientist%20Source%20Code-darkgray" alt="License"></a>
 </p>
 
----
+**The AI Scientist** is a fully automated research pipeline — ideas, novelty
+checks, real experiments by an LLM code agent, a LaTeX paper, a conference-style
+review, and a **repair loop that revises the paper from its own review** until
+it clears the bar. This fork turns that loop into a product: one dark-mode
+terminal dashboard with guard rails, event streams, reproducible run metadata
+and a research journal written to Obsidian along the way.
 
-**The AI Scientist** is a fully automated research pipeline: it generates
-ideas, checks them against the literature, runs real experiments with an LLM
-code agent, writes a LaTeX paper, reviews it like a conference referee — and
-now, **revises the paper from its own review** until it clears the bar.
+## The screen you actually see
 
-This fork turns the research loop into a **product you can actually run**:
-one dark-mode terminal dashboard — **the TUI** — with guard rails, event
-streams, reproducible run metadata and a research journal written to Obsidian
-along the way.
+`aiscientist` opens the dashboard. The doom-style start menu gives one-keystroke
+access (prompt empty); `1`–`7` switch workspaces, `ctrl+p` is the palette:
 
+```text
+╭─ research menu · press shift+key, prompt empty ─────────────────────────────╮╮
+│ C  continue project     nanoGPT_lite · run #3                                │
+│ P  open project         3 research projects                                  │
+│ N  new project          6-step wizard · writes prompt.json                   │
+│ R  run pipeline         ideas → experiments → paper                          │
+│ D  dashboard            stages · event rate · live log                       │
+│ A  auto-improve         review → revise → re-review                          │
+│ M  AI skeleton          LLM writes experiment.py + baseline                  │
+│ I  /init project rules  ·  1-7 workspaces  ·  ctrl+p palette                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+╭─ dashboard · job #3 · grokking_toy/cosine_lr_schedule ──────────────────────╮╮
+│   ideas        ✓  2m    novelty      ✓  4m                                   │
+│   experiments  ✓ 31m    writeup      ✓  9m                                   │
+│   review       ✓  3m    score 3.0/10  <6 improve ↻                           │
+│                                                                              │
+│   18:57:02 experiments.log   Applied edit to train.py                        │
+│   18:57:44 experiments.done  run_2: val_acc 0.981 ▲                          │
+│   18:58:10 writeup.section   Results · refine                                │
+│   »  4.2 ev/s    49m wall   seeds 0,1   welch z 0.7 ✓                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
 ```
- ideas ──▶ novelty ──▶ experiments ──▶ writeup ──▶ review ──┐
-   ▲                                                        │ score < min
-   │            ┌───────────────────────────────────────────┘
-   └─ learnings ◀── improve (revise from feedback, re-review)
-```
 
-## What you get
-
-| | |
-|---|---|
-| **Guarded pipeline** | Stage guards stop runaway loops, repeated outputs and time-budget breaches — headless or interactive |
-| **`improve` loop** *(new)* | Weak review? The paper is rewritten from the reviewer's feedback, recompiled and re-reviewed: `/improve 6:2` |
-| **AI project skeletons** *(new)* | Describe a research direction; the model writes `experiment.py` + `plot.py` and runs the baseline so `/run` works on day one |
-| **Event contract** | Every stage emits `started/log/done/fail` JSON-lines — the dashboard, `/report` and `logs -f` all read the same stream |
-| **Reproducibility** | `run_meta.json` per idea: model, seeds, package versions, code hash; Welch-z sanity checks flag "too good to be true" results |
-| **Research journal** | Ideas, statuses and guard decisions sync to an Obsidian vault automatically |
-| **Any model** | OpenRouter, OpenAI, Anthropic, DeepSeek, Gemini, local Ollama — one env var |
-| **Multi-platform** | Linux, Windows, WSL and Docker; the test suite runs on all (196 tests, both OSes in CI) |
+The Dashboard follows real jobs (stages, event-rate sparklines, live log), Chat
+delegates background workers, Notes browses ideas/Obsidian, Article renders the
+generated paper as ANSI text — and **Paper** (7) watches the article being
+built live: section checklist from `detail.section` events
+(draft → cite → refine → polish), review score, improve before→after, PDF status.
 
 ## Quickstart
 
@@ -62,10 +75,11 @@ python -m venv .venv && .venv\Scripts\activate   # Windows (source .venv/bin/act
 pip install -e .                                 # Python 3.11+
 
 cp .env.example .env                             # put your OPENROUTER_API_KEY inside
-aiscientist                                      # 🖥  that's the whole interface — the TUI
+aiscientist                                      # that's the whole interface — the TUI
 ```
 
-Prefer Docker (includes LaTeX, network-restricted):
+Prefer Docker (ships LaTeX + Bun; keeps LLM-generated code off your host —
+see the network-isolation note in `docker-compose.yml`)?
 
 ```bash
 docker compose build && docker compose run --rm scientist
@@ -75,33 +89,31 @@ docker compose build && docker compose run --rm scientist
 > `improve`). Without it the pipeline still runs ideas → experiments and
 > degrades gracefully. Headless: `sudo apt-get install texlive-full chktex`.
 
-## The TUI — the only interface
+## What you get
 
-`aiscientist` opens the terminal dashboard. The doom-style start menu gives
-one-keystroke access (prompt empty):
+| | |
+|---|---|
+| **Guarded pipeline** | Stage guards stop runaway loops, repeated outputs and time-budget breaches — headless or interactive |
+| **`improve` loop** | Weak review? The paper is rewritten from the reviewer's feedback, recompiled and re-reviewed: `/improve 6:2` |
+| **AI project skeletons** | Describe a research direction; the model writes `experiment.py` + `plot.py` and runs the baseline so `/run` works on day one |
+| **Event contract** | Every stage emits `started/log/done/fail` JSON-lines — the dashboard, `/report` and `logs -f` all read the same stream |
+| **Reproducibility** | `run_meta.json` per idea: model, seeds, package versions, code hash; Welch-z sanity checks flag "too good to be true" results |
+| **Research journal** | Ideas, statuses and guard decisions sync to an Obsidian vault automatically |
+| **Any model** | OpenRouter, OpenAI, Anthropic, DeepSeek, Gemini, local Ollama — one env var |
+| **Model router** | The pipeline routes **different models per task** — nothing hardcoded: candidates ranked from live OpenRouter catalog data (pricing, context, `supported_parameters`, recency; optionally lifted by live web discovery when `TAVILY_API_KEY` is set) |
+| **Multi-platform** | Linux, Windows, WSL and Docker; 248 tests on both OSes + Python 3.11/3.12 in CI |
 
-| Shift+key | Action | Shift+key | Action |
-|---|---|---|---|
-| `C` | continue project | `R` | run pipeline |
-| `P` | open project | `D` | dashboard |
-| `N` | new-project wizard | `A` | auto-improve preset |
-| `M` | **AI skeleton** (new) | `I` | `/init` project rules |
+## Commands worth knowing
 
-Six workspaces (`1`–`6`), a command palette (`ctrl+p`), leader keys
-(`ctrl+x`) and slash commands:
-
-```
+```text
 /run nanoGPT_lite            # pipeline — every stage lands on the Dashboard
+/paper                       # build the article: writeup → review (workspace 7)
 /improve 6:2                 # repair loop: min score 6, up to 2 rounds
 /skeleton lr_schedules       # AI writes experiment.py + plot.py + run_0 baseline
 /new-project                 # 6-step wizard, optional AI skeleton at step 5/6
 /report 3                    # markdown digest of a finished job → results/reports/
-/doctor                      # API key, LaTeX, aider, baseline — before burning credits
+/doctor                      # API key, LaTeX, aider, model roles — before burning credits
 ```
-
-The Dashboard follows real jobs (stages, event rate sparklines, live log),
-Chat delegates background workers, Notes browses ideas/Obsidian, Article
-renders the generated paper as ANSI text.
 
 ## Configuration
 
@@ -111,6 +123,7 @@ Key settings in `.env` (full table: [docs/BETA0.1.md §9](docs/BETA0.1.md)):
 |---|---|
 | `OPENROUTER_API_KEY` | model access (also `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …) |
 | `AISC_DEFAULT_MODEL` | which model drives the pipeline |
+| `AISC_MODEL_PLAN/CODE/REVIEW` | per-task model routing (auto-picked from the live catalog when unset) |
 | `AISC_RESULTS_DIR` | redirect all artifacts (tests / sandboxes) |
 | `AISC_SEED` / `AISC_EXP_SEEDS` | reproducibility |
 | `AISC_MAX_STAGE_MINUTES` | per-stage time budget |
@@ -121,38 +134,45 @@ Key settings in `.env` (full table: [docs/BETA0.1.md §9](docs/BETA0.1.md)):
 
 ## Project layout
 
-```
+```text
 ai_scientist/
 ├── console/           # entry point, headless runner, module registry, jobs, events, i18n
-│   └── modules/       # pipeline/run · generate/skeleton · auxiliary/* · report/last
+│   └── modules/       # pipeline/run · generate/skeleton · auxiliary/* · writeup · report/last
 ├── pipeline.py        # PipelineRunner: guarded stages + improve loop
+├── model_router.py    # per-task model picks from the live OpenRouter catalog
 ├── perform_*.py       # experiments (Aider), writeup (LaTeX), review
 └── ...
 opencode-tui/          # the TUI — Bun + React terminal dashboard (the only UI)
-templates/nanoGPT_lite # ships ready-to-run (baseline included)
-docs/                  # BETA0.1.md (source of truth) · DEBUG.md · release notes
+templates/             # 3 ready-to-run domains: nanoGPT_lite (GPU),
+                       # grokking_toy + parity_transformer (~1 min CPU, baselines included)
+docs/                  # BETA0.1.md (source of truth) · DEBUG.md · RUNBOOK-E2E.md · release notes
 ```
 
 ## Safety
 
-> **Warning.** The pipeline executes LLM-generated code. Run it in Docker or
-> another sandbox, not on a machine you love. Stage guards cap iterations,
-> repeated outputs and per-stage wall-clock time.
+```text
+╭─ warning ────────────────────────────────────────────────────────────────────╮
+│  The pipeline executes LLM-generated code. Run it in Docker or               │
+│  another sandbox, not on a machine you love. Stage guards cap                │
+│  iterations, repeated outputs and per-stage wall-clock time.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
-## Beta testing — v0.1-beta2
+## Beta testing — v0.2-beta3
 
-1. `aiscientist` → Shift+R on `nanoGPT_lite` → watch the full loop, press **A** to enable the improve pass.
+1. `aiscientist` → Shift+R on `nanoGPT_lite` → watch the full loop, press **A** to enable the improve pass. No GPU? `grokking_toy` runs the same loop on CPU in ~1 minute.
 2. Shift+N → wizard → step 5/6 **AI skeleton: y** → a new domain becomes runnable end-to-end.
 3. Broken? `/report <jobId>` + `/export` and [open an issue](https://github.com/desoxygen/ai/issues) with the digest.
 
-Release notes: [docs/RELEASE-v0.1-beta2.md](docs/RELEASE-v0.1-beta2.md).
+Release notes: [docs/RELEASE-v0.2-beta3.md](docs/RELEASE-v0.2-beta3.md) · upgrade guide: [docs/MIGRATION.md](docs/MIGRATION.md) · release gate: [docs/RUNBOOK-E2E.md](docs/RUNBOOK-E2E.md).
 
 ## Contributing & docs
 
 The living spec is [`docs/BETA0.1.md`](docs/BETA0.1.md) (architecture, event
 contract, backlog); the hidden headless runner is documented in
-[`docs/DEBUG.md`](docs/DEBUG.md). Welcome: new research templates, runner
-modules, model providers, docs and tests.
+[`docs/DEBUG.md`](docs/DEBUG.md), the release plan in [`docs/ROADMAP-1.0.md`](docs/ROADMAP-1.0.md)
+and the upgrade path in [`docs/MIGRATION.md`](docs/MIGRATION.md). Welcome: new
+research templates, runner modules, model providers, docs and tests.
 
 ## License & citation
 
