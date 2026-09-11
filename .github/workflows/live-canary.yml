@@ -18,8 +18,6 @@ jobs:
     timeout-minutes: 20
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      AISC_RESULTS_DIR: ${{ runner.temp }}/ais-live
-      OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault
       AISC_DEFAULT_MODEL: openrouter/z-ai/glm-5.2:free
       AISC_HEADLESS_ON_LIMIT: skip
     steps:
@@ -33,6 +31,10 @@ jobs:
         run: test -n "$OPENROUTER_API_KEY" && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
       - name: ideas + novelty via live OpenRouter
         if: steps.preflight.outputs.run == 'true'
+        env:
+          # runner.* is only available at step level, not job-level env
+          AISC_RESULTS_DIR: ${{ runner.temp }}/ais-live
+          OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault
         run: >
           aiscientist -q --lang en run
           --template grokking_toy
