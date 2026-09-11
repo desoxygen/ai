@@ -171,6 +171,9 @@ data/
 ICLR2022-OpenReviewData/
 # NOTE: templates/*/run_0/ (baseline final_info.json) MUST stay in the repo —
 # the experiments stage refuses to run without a committed baseline.
+templates/*/run_ci/
+# draft templates generated during E2E measurement runs (docs/E2E-*.md)
+templates/e2e_grok*/
 review_iclr_bench/
 example_papers/
 opencode-tui/dbg/

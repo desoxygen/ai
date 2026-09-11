@@ -76,8 +76,10 @@ def test_create_client_routing(monkeypatch):
 
 def test_available_llms_contains_openrouter_entries():
     from ai_scientist.llm import AVAILABLE_LLMS
-    assert "openrouter/z-ai/glm-5.2:free" in AVAILABLE_LLMS
     assert "openrouter/meta-llama/llama-3.3-70b-instruct" in AVAILABLE_LLMS
+    assert "openrouter/deepseek/deepseek-chat" in AVAILABLE_LLMS
+    # A free model id that vanished from the live catalog must not be pinned.
+    assert "openrouter/z-ai/glm-5.2:free" not in AVAILABLE_LLMS
 
 
 def test_llm_wrappers_exist():

@@ -1,7 +1,6 @@
 """Тесты settings: .env-парсер, маскирование секретов, конвертация путей."""
 import os
 
-import pytest
 
 from ai_scientist import settings
 

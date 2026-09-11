@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "attention_pooling_vs_mean",
+    "Title": "CLS-Token Pooling Is What Unlocks Parity Learning in Tiny Transformers",
+    "Experiment": "Compare readouts: mean-pool over positions, max-pool, and the CLS token used in the baseline. Keep depth/heads identical and report val_acc; add a variant with a learned gating pooling.",
+    "Interestingness": 7,
+    "Feasibility": 9,
+    "Novelty": 5
+  },
+  {
+    "Name": "curriculum_parity_length",
+    "Title": "Length Curriculum: Train on Short Parities, Generalize to 8 Bits",
+    "Experiment": "Add a curriculum: train on sequences with only the first k random bits (rest zero), increasing k from 3 to 8; evaluate final val_acc on the true 8-bit parity holdout. Compare against direct training under the 800-step budget.",
+    "Interestingness": 8,
+    "Feasibility": 8,
+    "Novelty": 6
+  },
+  {
+    "Name": "depth_and_heads_sweep",
+    "Title": "Minimum Depth and Head Count for Exact Parity",
+    "Experiment": "Sweep N_LAYERS over {1, 2, 3} and N_HEADS over {1, 2, 4}; report val_acc and final_train_loss. Identify the smallest architecture that still reaches >0.99 val_acc on 8-bit parity within the step budget.",
+    "Interestingness": 6,
+    "Feasibility": 9,
+    "Novelty": 4
+  }
+]

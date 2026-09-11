@@ -68,7 +68,7 @@ def test_events_written_to_log():
     with pytest.raises(StageSkip):
         g.failure("запись события")
     assert settings.GUARD_LOG.exists()
-    events = [json.loads(l) for l in settings.GUARD_LOG.read_text(encoding="utf-8").splitlines()]
+    events = [json.loads(line) for line in settings.GUARD_LOG.read_text(encoding="utf-8").splitlines()]
     kinds = {e["type"] for e in events}
     assert "failure" in kinds and "guard_decision" in kinds
 

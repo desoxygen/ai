@@ -148,6 +148,7 @@ Here is the paper you are asked to review:
 {text}
 ```"""
 
+    ensemble_ok = False
     if num_reviews_ensemble > 1:
         llm_review, msg_histories = get_batch_responses_from_llm(
             base_prompt,
@@ -167,36 +168,44 @@ Here is the paper you are asked to review:
             except Exception as e:
                 print(f"Ensemble review {idx} failed: {e}")
         parsed_reviews = [r for r in parsed_reviews if r is not None]
-        review = get_meta_review(model, client, temperature, parsed_reviews)
+        if not parsed_reviews:
+            # Every ensemble member returned unparsable JSON — degrade to a
+            # single reviewer instead of crashing with IndexError below.
+            print(f"Ensemble: no valid JSON in any of {num_reviews_ensemble} "
+                  f"reviews — falling back to a single reviewer.")
+        else:
+            ensemble_ok = True
+            review = get_meta_review(model, client, temperature, parsed_reviews)
 
-        # take first valid in case meta-reviewer fails
-        if review is None:
-            review = parsed_reviews[0]
+            # take first valid in case meta-reviewer fails
+            if review is None:
+                review = parsed_reviews[0]
 
-        # Replace numerical scores with the average of the ensemble.
-        for score, limits in [
-            ("Originality", (1, 4)),
-            ("Quality", (1, 4)),
-            ("Clarity", (1, 4)),
-            ("Significance", (1, 4)),
-            ("Soundness", (1, 4)),
-            ("Presentation", (1, 4)),
-            ("Contribution", (1, 4)),
-            ("Overall", (1, 10)),
-            ("Confidence", (1, 5)),
-        ]:
-            scores = []
-            for r in parsed_reviews:
-                if score in r and limits[1] >= r[score] >= limits[0]:
-                    scores.append(r[score])
-            review[score] = int(round(np.mean(scores)))
+            # Replace numerical scores with the average of the ensemble.
+            for score, limits in [
+                ("Originality", (1, 4)),
+                ("Quality", (1, 4)),
+                ("Clarity", (1, 4)),
+                ("Significance", (1, 4)),
+                ("Soundness", (1, 4)),
+                ("Presentation", (1, 4)),
+                ("Contribution", (1, 4)),
+                ("Overall", (1, 10)),
+                ("Confidence", (1, 5)),
+            ]:
+                scores = []
+                for r in parsed_reviews:
+                    if score in r and limits[1] >= r[score] >= limits[0]:
+                        scores.append(r[score])
+                review[score] = int(round(np.mean(scores)))
 
-        # Rewrite the message history with the valid one and new aggregated review.
-        msg_history = msg_histories[0][:-1]
-        msg_history += [
-            {
-                "role": "assistant",
-                "content": f"""
+            # Rewrite the message history with the valid one and new aggregated
+            # review.
+            msg_history = msg_histories[0][:-1]
+            msg_history += [
+                {
+                    "role": "assistant",
+                    "content": f"""
 THOUGHT:
 I will start by aggregating the opinions of {num_reviews_ensemble} reviewers that I previously obtained.
 
@@ -205,9 +214,10 @@ REVIEW JSON:
 {json.dumps(review)}
 ```
 """,
-            }
-        ]
-    else:
+                }
+            ]
+
+    if not ensemble_ok:
         llm_review, msg_history = get_response_from_llm(
             base_prompt,
             model=model,
@@ -299,7 +309,7 @@ def load_paper(pdf_path, num_pages=None, min_size=100):
 
 
 def load_review(path):
-    with open(path, "r") as json_file:
+    with open(path, "r", encoding="utf-8") as json_file:
         loaded = json.load(json_file)
     return loaded["review"]
 
@@ -330,7 +340,7 @@ Note that while each review is formatted differently according to each reviewer'
     ):
         txt_path = paper.replace(".pdf", ".txt")
         if os.path.exists(txt_path):
-            with open(txt_path, "r") as f:
+            with open(txt_path, "r", encoding="utf-8", errors="replace") as f:
                 paper_text = f.read()
         else:
             paper_text = load_paper(paper)

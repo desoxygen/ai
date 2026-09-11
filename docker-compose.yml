@@ -27,6 +27,12 @@ services:
     tty: true
     user: "1000:1000"
     command: []
+    # Safety: this container executes LLM-generated code. It has NO outbound
+    # restriction by default (the pipeline needs API/Semantic Scholar/pip).
+    # For full isolation uncomment:
+    #   network_mode: "none"
+    # (then stages that need the network will fail loudly — ideas/novelty/API),
+    # or route it through a proxy/firewall with an allowlist of LLM endpoints.
     # GPU (requires nvidia-container-toolkit):
     # deploy:
     #   resources:

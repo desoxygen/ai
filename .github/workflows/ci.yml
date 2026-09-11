@@ -6,6 +6,17 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check ai_scientist tests
+      - run: ruff check templates/grokking_toy templates/parity_transformer
+
   tui:
     strategy:
       fail-fast: false
@@ -32,16 +43,34 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       # exactly the README quickstart path — CI must test what users install
       - run: pip install -e . && pip install -r requirements-dev.txt
-      - run: python -m pytest tests/ -q
+      - name: pytest with coverage gate
+        run: python -m pytest tests/ -q --cov=ai_scientist --cov-fail-under=55
         env:
           AISC_TUI_OFFLINE: "1"
           AISC_RESULTS_DIR: ${{ runner.temp }}/ais-results-ci
           OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault
+      # C1: offline template canary - real experiment.py/plot.py runs, no API.
+      # Catches torch/numpy drift and 3.11 syntax regressions in shipped code.
+      - name: template offline canary (grokking_toy)
+        working-directory: templates/grokking_toy
+        run: |
+          python experiment.py --out_dir=run_ci
+          python check_run.py run_ci
+          python plot.py
+        timeout-minutes: 15
+      - name: template offline canary (parity_transformer)
+        working-directory: templates/parity_transformer
+        run: |
+          python experiment.py --out_dir=run_ci
+          python check_run.py run_ci
+          python plot.py
+        timeout-minutes: 15

@@ -13,7 +13,11 @@ export interface AisEvent {
   job_id?: number
   template?: string
   model?: string
-  detail?: { error?: string; exit_code?: number; path?: string; summary?: unknown; aborted?: boolean }
+  detail?: {
+    error?: string; exit_code?: number; path?: string; summary?: unknown; aborted?: boolean
+    section?: string; phase?: string; folder?: string; stages?: string[]
+    before?: number; after?: number; min_score?: number; rounds?: number
+  }
 }
 
 export interface AisJob {
@@ -383,6 +387,48 @@ export function skeletonArgs(opts: { name: string; description: string; model?: 
 
 export function startSkeleton(opts: { name: string; description: string; model?: string; baseline?: boolean }): RunHandle {
   const child = spawn(process.env.AISC_PYTHON || "python", skeletonArgs(opts), {
+    cwd: PROJECT_ROOT,
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: true,
+  })
+  child.stderr?.resume()
+  return { child, stop: () => killTree(child) }
+}
+
+export interface PaperOptions {
+  template: string
+  folder?: string
+  stages?: string
+  model?: string
+  planModel?: string
+  codeModel?: string
+  reviewModel?: string
+  /** "on:<minScore>:<rounds>" or "off" (settings.improve format). */
+  improve?: string
+}
+
+export function paperArgs(opts: PaperOptions): string[] {
+  const args = [
+    "-m",
+    "ai_scientist.console.cli",
+    "-q",
+    "paper",
+    "--template",
+    opts.template,
+    ...(opts.folder ? ["--folder", opts.folder] : []),
+    ...(opts.stages ? ["--stages", opts.stages] : []),
+    ...(opts.model ? ["--model", opts.model] : []),
+    ...(opts.planModel ? ["--plan-model", opts.planModel] : []),
+    ...(opts.codeModel ? ["--code-model", opts.codeModel] : []),
+    ...(opts.reviewModel ? ["--review-model", opts.reviewModel] : []),
+  ]
+  const m = /^on:([\d.]+):(\d+)$/.exec(opts.improve ?? "off")
+  if (m) args.push("--improve", "--min-score", m[1], "--rounds", m[2])
+  return args
+}
+
+export function startPaper(opts: PaperOptions): RunHandle {
+  const child = spawn(process.env.AISC_PYTHON || "python", paperArgs(opts), {
     cwd: PROJECT_ROOT,
     stdio: ["ignore", "ignore", "pipe"],
     windowsHide: true,

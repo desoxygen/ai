@@ -163,7 +163,6 @@ def test_run_aborted_is_graceful(runner, monkeypatch, tmp_vault):
 # ------------------------------------------------------------- improvement loop
 def _prep_review(runner, tmp_path, monkeypatch, scores):
     """Общая подготовка stage_review: фейковые ревью/правком/компиляция."""
-    import os.path as osp
     from ai_scientist import perform_writeup as pw
 
     folder = tmp_path / "20260907_120000_imp_idea"
@@ -213,7 +212,6 @@ def test_improve_loop_repairs_and_reviews_again(runner, tmp_path, monkeypatch, t
 
 
 def test_improve_env_legacy_knob_still_works(runner, tmp_path, monkeypatch, tmp_vault):
-    import os
     idea, folder, _, calls, events = _prep_review(
         runner, tmp_path, monkeypatch, [4.0, 9.0])
     monkeypatch.setenv("AISC_REVIEW_FIX_ITER", "1")
@@ -261,3 +259,18 @@ def test_run_module_forwards_improve_options(tmp_path, monkeypatch):
     assert captured["improvement"] is True
     assert captured["improve_min_score"] == 7.0
     assert captured["improve_rounds"] == 3
+
+
+# ------------------------------------------------------- LaTeX dependency check
+def test_check_latex_requires_only_pdflatex(monkeypatch):
+    """chktex (missing on MiKTeX) must NOT disable writeup/review anymore."""
+    from ai_scientist import pipeline as _p
+    monkeypatch.setattr(_p.shutil, "which",
+                        lambda d: "C:/x/pdflatex.exe" if d == "pdflatex" else None)
+    assert _p.check_latex_dependencies() is True
+
+
+def test_check_latex_false_without_pdflatex(monkeypatch):
+    from ai_scientist import pipeline as _p
+    monkeypatch.setattr(_p.shutil, "which", lambda d: None)
+    assert _p.check_latex_dependencies() is False

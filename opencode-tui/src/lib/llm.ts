@@ -28,6 +28,43 @@ export function hasEnv(name: string): boolean {
   return env(name).length > 0
 }
 
+/** Which API key a model id requires ("" = no key needed / unknown).
+ *  Mirrors ai_scientist/console/modules/auxiliary/env.py::provider_key_for. */
+export function providerKeyFor(model: string): string {
+  const m = (model || "").trim()
+  if (!m) return ""
+  if (m.startsWith("openrouter/") || m === "llama3.1-405b") return "OPENROUTER_API_KEY"
+  if (m.startsWith("ollama/")) return ""  // no key, but the local server must run
+  if (m.startsWith("claude-") || m.startsWith("bedrock") || m.startsWith("vertex_ai")) return "ANTHROPIC_API_KEY"
+  if (m.includes("gemini")) return "GEMINI_API_KEY"
+  if (m.startsWith("deepseek-")) return "DEEPSEEK_API_KEY"
+  if (m.includes("gpt") || m.startsWith("o1") || m.startsWith("o3")) return "OPENAI_API_KEY"
+  return ""
+}
+
+/** The raw AISC_DEFAULT_MODEL as the pipeline runner will see it. */
+export function configuredPipelineModel(): string {
+  return env("AISC_DEFAULT_MODEL")
+}
+
+/** Human-readable /doctor row for the pipeline model's provider/key state.
+ *  Pure + injectable key probe so it is testable without touching .env. */
+export function pipelineModelStatus(
+  model: string,
+  keyPresent: (name: string) => boolean = hasEnv,
+): string {
+  if (!model) return "AISC_DEFAULT_MODEL not set (runner uses its own default)"
+  const k = providerKeyFor(model)
+  if (!k) {
+    return model.startsWith("ollama/")
+      ? `${model} — local Ollama server required`
+      : `${model} — no key needed`
+  }
+  return keyPresent(k)
+    ? `${model} — key ${k} set`
+    : `${model} — WARNING: needs ${k}, which is not set`
+}
+
 // ------------------------------------------------------------------- routers
 //
 // A router is an LLM endpoint the TUI can talk to. OpenAI-compatible routers

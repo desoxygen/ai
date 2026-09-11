@@ -37,7 +37,6 @@ AVAILABLE_LLMS = [
     "openrouter/meta-llama/llama-3.3-70b-instruct",
     "openrouter/deepseek/deepseek-chat",
     "openrouter/openai/gpt-4o-mini",
-    "openrouter/z-ai/glm-5.2:free",
     # Anthropic Claude models via Amazon Bedrock
     "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
     "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",

@@ -1,0 +1,41 @@
+name: Live canary (ideas -> novelty)
+
+# Requires the repo secret OPENROUTER_API_KEY. If it is absent (forks, etc.)
+# every live step is skipped so the workflow never fails for a missing key.
+# Run a real cheap model through the two network stages on the CPU template.
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_ideas:
+        description: "ideas to generate"
+        required: false
+        default: "2"
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AISC_RESULTS_DIR: ${{ runner.temp }}/ais-live
+      OBSIDIAN_VAULT_PATH: ${{ runner.temp }}/vault
+      AISC_DEFAULT_MODEL: openrouter/z-ai/glm-5.2:free
+      AISC_HEADLESS_ON_LIMIT: skip
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: preflight (secret present?)
+        id: preflight
+        run: test -n "$OPENROUTER_API_KEY" && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
+      - name: ideas + novelty via live OpenRouter
+        if: steps.preflight.outputs.run == 'true'
+        run: >
+          aiscientist -q --lang en run
+          --template grokking_toy
+          --stages ideas,novelty
+          --num-ideas "${{ github.event.inputs.num_ideas || '2' }}"
+          --num-reflections 1

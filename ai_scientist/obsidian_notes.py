@@ -130,7 +130,6 @@ def update_idea_status(template: str, idea_name: str, status: str,
         return None
     text = path.read_text(encoding="utf-8")
     text = re.sub(r"^status: \"?[^\"]*\"?", f'status: "{status}"', text, count=1, flags=re.M)
-    marks = {"done": "x", "failed": "x", "skipped": "-"}.get(status, " ")
     mapping = checklist or {}
     for key in ("Эксперименты", "Статья", "Рецензия"):
         state = mapping.get(key, None)

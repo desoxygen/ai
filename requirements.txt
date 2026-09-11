@@ -3,8 +3,9 @@ anthropic
 aider-chat
 backoff
 openai
-google-generativeai
 requests
+# Novelty engines
+pyalex            # --engine openalex
 # Console / REPL
 rich
 questionary

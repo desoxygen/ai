@@ -117,6 +117,26 @@ _translations = {
         "en": 'AISC_DEFAULT_MODEL: (not set)',
         "ru": 'AISC_DEFAULT_MODEL: (не задан)',
     },
+    "env_model_key_ok": {
+        "en": 'model provider: %s is set',
+        "ru": 'провайдер модели: %s задан',
+    },
+    "env_model_key_missing": {
+        "en": 'WARNING: model "%s" needs %s, but it is not set',
+        "ru": 'ВНИМАНИЕ: модели «%s» нужен %s, но он не задан',
+    },
+    "env_ollama_up": {
+        "en": 'Ollama server: reachable (%s)',
+        "ru": 'Ollama-сервер: доступен (%s)',
+    },
+    "env_ollama_down": {
+        "en": 'WARNING: Ollama server not reachable at %s — run `ollama serve` or set OLLAMA_HOST',
+        "ru": 'ВНИМАНИЕ: Ollama-сервер недоступен на %s — запустите `ollama serve` или задайте OLLAMA_HOST',
+    },
+    "env_roles_error": {
+        "en": 'model roles: unavailable (%s)',
+        "ru": 'роли моделей: недоступно (%s)',
+    },
     "env_latex_ok": {
         "en": 'ok',
         "ru": 'ok',
@@ -140,6 +160,18 @@ _translations = {
     "report_no_results": {
         "en": 'no results',
         "ru": 'результатов нет',
+    },
+    "paper_folder_missing": {
+        "en": 'run folder not found: %s',
+        "ru": 'папка прогона не найдена: %s',
+    },
+    "paper_no_run": {
+        "en": 'no run folder with notes.txt under %s — run the pipeline first',
+        "ru": 'в %s нет папки прогона с notes.txt — сначала выполните пайплайн',
+    },
+    "paper_empty_stages": {
+        "en": 'STAGES must include writeup and/or review',
+        "ru": 'STAGES должен включать writeup и/или review',
     },
     "report_latest": {
         "en": 'latest run: %s',

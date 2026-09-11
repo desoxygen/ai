@@ -15,8 +15,9 @@ import json
 import os
 import os.path as osp
 import shutil
+import warnings
 
-from ai_scientist import loop_guard, obsidian_notes
+from ai_scientist import loop_guard, model_router, obsidian_notes
 from ai_scientist.loop_guard import StageGuard, RunAborted, StageSkip
 from ai_scientist.generate_ideas import generate_ideas, check_idea_novelty
 from ai_scientist.llm import create_client
@@ -40,10 +41,16 @@ loop_guard.add_observer(_journal_observer)
 
 
 def check_latex_dependencies() -> bool:
-    missing = [d for d in ("pdflatex", "chktex") if shutil.which(d) is None]
-    if missing:
+    """Only pdflatex is mandatory. chktex (TeX Live only, absent in MiKTeX) is
+    optional: without it generate_latex just skips the lint pass."""
+    if shutil.which("pdflatex") is None:
+        missing = [d for d in ("pdflatex", "chktex")
+                   if shutil.which(d) is None]
         print(f"Отсутствуют LaTeX-зависимости: {missing}")
         return False
+    if shutil.which("chktex") is None:
+        print("chktex не найден — lint-проверка LaTeX будет пропущена "
+              "(MiKTeX не поставляет его; это нормально).")
     return True
 
 
@@ -52,11 +59,19 @@ class PipelineRunner:
                  num_reflections: int = 3, engine: str = "semanticscholar",
                  improvement: bool = False, stages=None, run_id: str = "",
                  emit=None, stop_event=None, idea_filter: str = "",
-                 improve_min_score: float = 6.0, improve_rounds: int = 1):
+                 improve_min_score: float = 6.0, improve_rounds: int = 1,
+                 models: dict = None):
         self.template = template
         self.base_dir = osp.join("templates", template)
         self.results_dir = osp.join("results", template)
         self.model = model
+        # Task-role models (docs/PLAN-PAPER-ROLES-TUI.md §R): explicit per-run
+        # `models` dict > AISC_MODEL_* env overrides > (lazy catalog auto-pick).
+        # NOTE: only env lookups here — no catalog network in the constructor.
+        _m = models or {}
+        self.plan_model = _m.get("plan") or model_router.explicit("plan") or model
+        self.code_model = _m.get("code") or model_router.explicit("code") or ""
+        self.review_model = _m.get("review") or model_router.explicit("review") or ""
         self.num_ideas = num_ideas
         self.num_reflections = num_reflections
         self.engine = engine
@@ -124,7 +139,11 @@ class PipelineRunner:
                     print("LaTeX не найден — стадии writeup/review будут недоступны.")
                     self.stages.discard("writeup")
                     self.stages.discard("review")
-            self.client, self.client_model = create_client(self.model)
+            self.client, self.client_model = create_client(self.plan_model)
+            if self.plan_model != self.model or self.code_model or self.review_model:
+                self.log(f"Роли моделей: plan={self.plan_model}  "
+                         f"code={self.code_model or '(авто при экспериментах)'}  "
+                         f"review={self.review_model or '(авто/ансамбль в стадии review)'}")
 
             ideas = self.stage_ideas()
             if "novelty" in self.stages and ideas:
@@ -249,7 +268,7 @@ class PipelineRunner:
         baseline = None
         if "experiments" in self.stages:
             try:
-                with open(osp.join(self.base_dir, "run_0", "final_info.json")) as f:
+                with open(osp.join(self.base_dir, "run_0", "final_info.json"), encoding="utf-8") as f:
                     baseline = json.load(f)
                 if isinstance(baseline, dict):
                     baseline = {k: v["means"] for k, v in baseline.items()}
@@ -308,21 +327,23 @@ class PipelineRunner:
         from aider.models import Model
         io = InputOutput(yes=True, chat_history_file=osp.join(
             folder_name, f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_aider.txt"))
-        if self.model.startswith("openrouter/"):
+        coder_model = self.code_model or model_router.resolve(
+            "code", default=self.model)[0] or self.model
+        if coder_model.startswith("openrouter/"):
             # aider speaks OpenRouter natively via the "openrouter/" prefix
-            main_model = Model(self.model)
-        elif self.model.startswith("ollama/"):
+            main_model = Model(coder_model)
+        elif coder_model.startswith("ollama/"):
             # local model via litellm's ollama_chat provider
             os.environ.setdefault("OLLAMA_API_BASE", "http://localhost:11434")
-            main_model = Model("ollama_chat/" + self.model.split("/", 1)[1])
-        elif self.model == "deepseek-coder-v2-0724":
+            main_model = Model("ollama_chat/" + coder_model.split("/", 1)[1])
+        elif coder_model == "deepseek-coder-v2-0724":
             main_model = Model("deepseek/deepseek-coder")
-        elif self.model == "deepseek-reasoner":
+        elif coder_model == "deepseek-reasoner":
             main_model = Model("deepseek/deepseek-reasoner")
-        elif self.model == "llama3.1-405b":
+        elif coder_model == "llama3.1-405b":
             main_model = Model("openrouter/meta-llama/llama-3.1-405b-instruct")
         else:
-            main_model = Model(self.model)
+            main_model = Model(coder_model)
         return Coder.create(main_model=main_model, fnames=fnames, io=io,
                             stream=False, use_git=False, edit_format="diff")
 
@@ -387,8 +408,14 @@ class PipelineRunner:
         try:
             coder = self._make_coder(folder_name, idea, [exp_file, writeup_file, notes])
             self.log(f"*Написание статьи* для «{idea['Name']}»")
+
+            def _progress(section, phase):
+                self._emit("writeup", "log", f"{section}: {phase}",
+                           idea_id=idea["Name"],
+                           detail={"section": section, "phase": phase})
+
             perform_writeup(idea, folder_name, coder, self.client, self.client_model,
-                            engine=self.engine)
+                            engine=self.engine, progress=_progress)
             guard.success()
             obsidian_notes.update_idea_status(self.template, idea["Name"], "writeup",
                                               checklist={"Статья": True})
@@ -416,6 +443,24 @@ class PipelineRunner:
         except (ValueError, TypeError, AttributeError):
             return None
 
+    @staticmethod
+    def _legacy_improve_settings() -> tuple:
+        """DEPRECATED env pair -> (min_score, fix_iters).
+
+        Use the improve-loop options (IMPROVE / IMPROVE_MIN_SCORE /
+        IMPROVE_ROUNDS, or /improve in the TUI). Removal planned for v1.0.
+        """
+        min_score = float(os.environ.get("AISC_REVIEW_MIN_SCORE", "0") or 0)
+        fix_iters = int(os.environ.get("AISC_REVIEW_FIX_ITER", "0") or 0)
+        if min_score or fix_iters:
+            warnings.warn(
+                "AISC_REVIEW_MIN_SCORE / AISC_REVIEW_FIX_ITER are deprecated; "
+                "use the improve-loop options (IMPROVE / IMPROVE_MIN_SCORE / "
+                "IMPROVE_ROUNDS, or /improve in the TUI). "
+                "The env pair will be removed in v1.0.",
+                DeprecationWarning, stacklevel=3)
+        return min_score, fix_iters
+
     def _run_review(self, idea, folder_name, pdf, r_client, r_model, ensemble, guard):
         paper_text = load_paper(pdf)
         review = perform_review(paper_text, model=r_model, client=r_client,
@@ -433,15 +478,21 @@ class PipelineRunner:
         self._emit("review", "started", f"рецензия для «{idea['Name']}»",
                    idea_id=idea["Name"])
         try:
-            review_model = os.environ.get("AISC_REVIEW_MODEL", "")
+            review_model = self.review_model  # --models / AISC_REVIEW_MODEL
             if review_model:
                 r_client, r_model = create_client(review_model)
                 ensemble = 1
             elif os.environ.get("OPENAI_API_KEY"):
                 r_client, r_model, ensemble = openai.OpenAI(), "gpt-4o-2024-05-13", 5
             else:
-                r_client, r_model, ensemble = self.client, self.client_model, 1
-                self.log("OPENAI_API_KEY не задан — ревью основной моделью без ансамбля.")
+                auto_r, auto_src = model_router.resolve("review", default=self.model)
+                if auto_src == "auto":
+                    self.log(f"Рецензия: модель из каталога {auto_r} (авто-выбор роли review).")
+                    r_client, r_model = create_client(auto_r)
+                    ensemble = 1
+                else:
+                    r_client, r_model, ensemble = self.client, self.client_model, 1
+                    self.log("OPENAI_API_KEY не задан — ревью основной моделью без ансамбля.")
             self.log(f"*Рецензия* для «{idea['Name']}» ({r_model}, ensemble={ensemble})")
             review = self._run_review(idea, folder_name, pdf, r_client, r_model, ensemble, guard)
             score = self._review_score(review)
@@ -452,9 +503,9 @@ class PipelineRunner:
             # (perform_improvement), the paper is fixed, recompiled and
             # re-reviewed until it clears the score bar or rounds run out.
             # Opt in per-run (pipeline/run IMPROVE) or via the legacy
-            # AISC_REVIEW_MIN_SCORE / AISC_REVIEW_FIX_ITER env pair.
-            min_score = float(os.environ.get("AISC_REVIEW_MIN_SCORE", "0") or 0)
-            fix_iters = int(os.environ.get("AISC_REVIEW_FIX_ITER", "0") or 0)
+            # (deprecated, removal in 1.0) AISC_REVIEW_MIN_SCORE /
+            # AISC_REVIEW_FIX_ITER env pair.
+            min_score, fix_iters = self._legacy_improve_settings()
             if self.improvement:
                 fix_iters = max(fix_iters, self.improve_rounds)
                 min_score = max(min_score, self.improve_min_score)
@@ -562,7 +613,6 @@ class PipelineRunner:
         if not osp.exists(notes):
             raise FileNotFoundError(f"{notes} — невозможно продолжить без notes.txt")
 
-        ok_writeup = osp.exists(osp.join(folder_name, "latex", "template.tex"))
         ok_review = osp.exists(osp.join(folder_name, f"{name}.pdf"))
         if "writeup" in stages:
             self.stage_writeup(idea, folder_name, notes)

@@ -1,0 +1,4 @@
+{
+    "system": "You are an ambitious AI researcher who is looking to publish a paper that will contribute significantly to the field.",
+    "task_description": "You are given the following file to work with, which trains a tiny transformer to compute the parity (XOR of all bits) of length-8 binary sequences within a deliberately tight 800-step budget. Parity is the canonical task separating attention-based models from MLPs. The key metric is val_acc on a fixed 4096-example holdout set."
+}

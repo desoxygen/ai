@@ -3,6 +3,10 @@
 > Single source of truth for the project. Generated 2026-09-06; updated 2026-09-07 for **v0.1-beta2**
 > (TUI is now the **only** interface — the REPL was removed; improve loop, generate/skeleton,
 > `AISC_RESULTS_DIR`, hermetic tests). Release notes: `docs/RELEASE-v0.1-beta2.md`; hidden runner: `docs/DEBUG.md`.
+> Updated 2026-09-10 (post-audit hardening: 3 ready templates, `perform_*` integration tests,
+> deprecated `google-generativeai` dropped, `/doctor` model-key cross-check). Readiness report: `docs/ANALYSIS.md`.
+> Same day (evening): real LaTeX E2E pass + model-role routing + the 7th **Paper** workspace — see
+> `docs/E2E-PAPER-MEASUREMENTS.md` and `docs/PLAN-PAPER-ROLES-TUI.md`.
 > Replaces: AGENTS.md, BETA1_AUDIT.md, BETA1_PLAN.md, BACKLOG.md, EVENTS.md, README-BETA1.md, TUI_REDESIGN.md, TUI_MODERNIZATION.md, docs/UI_IMPROVEMENTS.md
 
 ---
@@ -39,7 +43,9 @@ AI-Scientist/
 │   │       ├── auxiliary/ideas.py
 │   │       ├── auxiliary/models.py
 │   │       ├── generate/skeleton.py
-│   │       └── report/last.py
+│   │       ├── report/last.py
+│   │       └── writeup/paper.py   # article builder (resume run → writeup/review/improve)
+│   ├── model_router.py       # task-role model resolution (plan/code/review/discuss)
 │   ├── pipeline.py           # PipelineRunner (575 lines)
 │   ├── generate_ideas.py     # Idea generation + novelty check
 │   ├── perform_experiments.py # Experiment execution via Aider
@@ -53,9 +59,11 @@ AI-Scientist/
 │   └── obsidian_notes.py     # Obsidian vault integration
 ├── opencode-tui/             # Bun/React TUI (57 source files)
 ├── templates/                # Research templates
-│   └── nanoGPT_lite/         # Included template
+│   ├── nanoGPT_lite/         # GPU transformer (baseline committed)
+│   ├── grokking_toy/         # CPU grokking on modular addition (baseline committed)
+│   └── parity_transformer/   # CPU parity transformer (baseline committed)
 ├── results/                  # Run artifacts + job logs
-├── tests/                    # Test suite (107 pytest + standalone smoke)
+├── tests/                    # Test suite (159 pytest + standalone smoke)
 ├── pyproject.toml            # Package config (aiscientist entry point)
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Docker support
@@ -81,7 +89,7 @@ pip install -e .
 cp .env.example .env
 # Edit .env — set at least one API key:
 # OPENROUTER_API_KEY=sk-or-...
-# AISC_DEFAULT_MODEL=openrouter/z-ai/glm-5.2:free
+# AISC_DEFAULT_MODEL=              # empty = auto-pick a live free OpenRouter model
 ```
 
 ### Run
@@ -130,13 +138,16 @@ def run(options, job, emit, stop_event=None) -> dict:
 | Module | Type | Purpose |
 |--------|------|---------|
 | `pipeline/run` | pipeline | Run full pipeline |
+| `writeup/paper` | pipeline | Build/repair the ARTICLE of an existing run folder (writeup → review → improve) |
 | `auxiliary/env` | auxiliary | Check environment |
 | `auxiliary/ideas` | auxiliary | List template ideas |
 | `auxiliary/models` | auxiliary | Browse LLM models |
 | `generate/skeleton` | generate | AI-generated project skeleton (experiment.py + plot.py + baseline) |
 | `report/last` | report | Show last run artifacts |
 
-**`pipeline/run` options:** `TEMPLATE`, `MODEL`, `IDEA`, `NUM_IDEAS`, `NUM_REFLECTIONS`, `STAGES`, `ENGINE`, plus `IMPROVE` (`on`/`off`), `IMPROVE_MIN_SCORE`, `IMPROVE_ROUNDS` to enable the review-driven paper-repair loop.
+**`pipeline/run` options:** `TEMPLATE`, `MODEL`, `IDEA`, `NUM_IDEAS`, `NUM_REFLECTIONS`, `STAGES`, `ENGINE`, plus `IMPROVE` (`on`/`off`), `IMPROVE_MIN_SCORE`, `IMPROVE_ROUNDS` to enable the review-driven paper-repair loop. The three role models `PLAN_MODEL` / `CODE_MODEL` / `REVIEW_MODEL` override task routing per run (see §9 Model roles).
+
+**`writeup/paper` options:** `TEMPLATE`, `FOLDER` (specific `results/<t>/<ts>_<idea>` run folder; empty = newest with notes.txt), `STAGES` (subset of `writeup,review`), `ENGINE`, `MODEL`/`PLAN_MODEL`/`CODE_MODEL`/`REVIEW_MODEL`, `IMPROVE`/`IMPROVE_MIN_SCORE`/`IMPROVE_ROUNDS`. Headless: `aiscientist -q paper --template T [--improve --min-score 6 --rounds 1]`.
 
 ### Language Support
 
@@ -174,18 +185,21 @@ bun run start
 | 4 | Notes | Ideas browser, Obsidian notes |
 | 5 | Agents | Background LLM workers |
 | 6 | Article | Paper reader (LaTeX → ANSI) |
+| 7 | Paper | **Article building**: live section checklist (draft/cite/refine/polish from `detail.section` events), writeup→review→improve progress + score, PDF status. `/paper [template]`, key `p` (re)start |
+| 7 | Paper | **Article building**: live section checklist (draft/cite/refine/polish), writeup→review→improve progress, review score + before/after, PDF status |
 
 ### Slash Commands
 
 | Command | Description |
 |---------|-------------|
 | `/run <template>` | Start pipeline run (honors `/improve`) |
+| `/paper [template]` | Build the article of the newest run (writeup → review; honors `/improve`) |
 | `/improve [off\|on\|min:rounds]` | Configure the review→repair→re-review loop |
 | `/skeleton <project>` | Generate an AI skeleton (experiment.py + plot.py + baseline) |
 | `/new-project` | Create new project |
 | `/init` | Generate AGENTS.md |
 | `/delegate <task>` | Spawn background worker |
-| `/doctor` | Environment check |
+| `/doctor` | Environment check (now incl. model roles plan/code/review/discuss) |
 
 ### Keyboard
 
@@ -276,7 +290,7 @@ Events are JSON-line records in `results/events/<job_id>.jsonl`.
 | `ideas` | `PipelineRunner.stage_ideas` |
 | `novelty` | `PipelineRunner.stage_novelty` |
 | `experiments` | `PipelineRunner.stage_experiments` |
-| `writeup` | `PipelineRunner.stage_writeup` |
+| `writeup` | `PipelineRunner.stage_writeup` (log events carry `detail={"section","phase"}` — phase ∈ draft/cite/refine/final/compile, powers the Paper workspace checklist) |
 | `review` | `PipelineRunner.stage_review` |
 | `improve` | review→revise→re-review loop inside `stage_review` (detail: `before`/`after` score) |
 | `skeleton` | `generate/skeleton` module (AI project skeleton + baseline run) |
@@ -306,7 +320,7 @@ Rules:
 | `OPENROUTER_API_KEY` | — | API key for OpenRouter |
 | `OPENAI_API_KEY` | — | API key for OpenAI |
 | `ANTHROPIC_API_KEY` | — | API key for Anthropic |
-| `AISC_DEFAULT_MODEL` | `openrouter/z-ai/glm-5.2:free` | Default LLM model |
+| `AISC_DEFAULT_MODEL` | (empty = auto) | Default LLM model; empty auto-picks a live free OpenRouter model via `/models` |
 | `AISC_DISCUSS_MODEL` | — | Model for discussions |
 | `AISC_REVIEW_MODEL` | — | Model for reviews |
 | `OBSIDIAN_VAULT_PATH` | — | Path to Obsidian vault |
@@ -319,9 +333,31 @@ Rules:
 | `AISC_ON_LIMIT` | `ask` | Action on limit: `ask`/`continue`/`skip`/`abort` |
 | `AISC_LANG` | `en` | Runner/UI language: `en`/`ru` |
 | `AISC_RESULTS_DIR` | `results/` | Redirect all artifacts (jobs/events/results) — tests + sandboxes |
-| `AISC_REVIEW_MIN_SCORE` | `0` | Legacy: auto-repair papers below this score (0=off) |
-| `AISC_REVIEW_FIX_ITER` | `0` | Legacy: max repair rounds (0=off) |
+| `AISC_REVIEW_MIN_SCORE` | `0` | **Deprecated** (use IMPROVE_MIN_SCORE): auto-repair papers below this score (0=off); removal in v1.0 |
+| `AISC_REVIEW_FIX_ITER` | `0` | **Deprecated** (use IMPROVE_ROUNDS): max repair rounds (0=off); removal in v1.0 |
 | `AISC_SKELETON_TIMEOUT_MIN` | `20` | generate/skeleton baseline run_0 timeout (minutes) |
+| `AISC_LATEX_TIMEOUT` | `120` | per-command pdflatex/bibtex timeout (MiKTeX on-demand installs need >30s on first compile) |
+| `AISC_MODEL_PLAN` | — | Model for ideas/novelty (empty = pipeline model) |
+| `AISC_MODEL_CODE` | — | Model for aider code edits (empty = catalog auto-pick of a coder model, else pipeline model) |
+| `AISC_AUTO_MODELS` | `on` | `off` disables catalog auto-pick for the code/review roles |
+| `AISC_ALLOW_PAID` | off | Allow paid models in auto-pick (capped by the next two) |
+| `AISC_MODEL_PRICE_CAP` | `10` | Max $/1M (prompt+completion) for paid candidates when `AISC_ALLOW_PAID` is on |
+| `AISC_MODEL_MIN_CTX` | `16384` | Context-window gate for auto-pick candidates (plan/review raise it to ≥32768) |
+| `AISC_MODEL_WEB_DISCOVERY` | `on` | With `TAVILY_API_KEY` set, consult live web results ("best cheap smart model for <role>"); found ids are validated against the OpenRouter catalog before boosting — the web can re-rank real models, never invent them |
+
+### Model roles (`ai_scientist/model_router.py`)
+
+The pipeline resolves three roles per run: **plan** (ideas, novelty, section
+planning), **code** (Aider edits), **review** (the referee pass). Nothing is
+chosen by hardcoded name lists: candidates are ranked by **live OpenRouter
+catalog signals** — `pricing`, `context_length`, `supported_parameters`
+(`reasoning`/`tools`/`structured_outputs`), modality and recency — divided by
+price with role-specific weights (cheap workhorse for code, reasoner for
+plan/review), behind context/price gates. With `TAVILY_API_KEY` the ranking is
+additionally lifted by live web discovery, whose ids are validated against the
+catalog first. Precedence for each role: explicit `--plan-model/--code-model/
+--review-model` > `AISC_MODEL_*` env > (plan: the pipeline model; code/review:
+auto-pick) > pipeline model. `/doctor` prints the resolved roles.
 
 ### Guard Limits
 
@@ -342,7 +378,7 @@ Supported via `AISC_DEFAULT_MODEL`:
 
 | Provider | Examples |
 |----------|----------|
-| OpenRouter | `openrouter/z-ai/glm-5.2:free` |
+| OpenRouter | `openrouter/google/gemma-4-26b-a4b-it:free` (see `/models` for the live free list) |
 | OpenAI | `openai/gpt-4o` |
 | Anthropic | `anthropic/claude-sonnet-4-20250514` |
 | DeepSeek | `deepseek/deepseek-chat` |
@@ -388,9 +424,19 @@ templates/<name>/
     └── references.bib     # Bibliography
 ```
 
-### Included Template
+### Included Templates
 
-**nanoGPT_lite** — transformer training on text data.
+Three domains ship ready-to-run (each with a committed `run_0/` baseline):
+
+| Template | Domain | Baseline cost |
+|----------|--------|---------------|
+| **nanoGPT_lite** | transformer LM on character text (needs GPU + downloaded data) | hours |
+| **grokking_toy** | grokking on modular addition (mod 11), tiny MLP | ~1 min CPU, deterministic |
+| **parity_transformer** | parity of 8-bit sequences, tiny transformer | ~1 min CPU, deterministic |
+
+`grokking_toy` and `parity_transformer` use the flat final-info contract
+(`{metric: {"means": x, "stderrs": y}}`) so the `sanity_check` gate compares
+metrics directly against the baseline without normalization gaps.
 
 ### Template File Purposes
 
@@ -434,10 +480,16 @@ python tests/test_smoke.py
 | File | Tests | Coverage |
 |------|-------|----------|
 | `test_console_smoke.py` | 34 | Runner imports/execute_job, registry, jobs, events, CLI dispatch, i18n |
-| `test_pipeline.py` | 16 | PipelineRunner stages, resume, abort, improve loop, option wiring |
+| `test_pipeline.py` | 18 | PipelineRunner stages, resume, abort, improve loop, option wiring, LaTeX-deps semantics |
+| `test_perform_integration.py` | 12 | perform_* integration: real-subprocess experiments, sanity gate, repeat-escalation, plotting interpreter, review/ensemble/fallback/improve/load_paper/few-shot-utf8, writeup flow, generate_latex checks |
+| `test_env_doctor.py` | 15 | /doctor: provider-key mapping table, Ollama reachability, env module warn/ok paths |
+| `test_model_router.py` | 15 | Role resolution: catalog-signal ranking (price/ctx/params/recency), gates, env overrides, auto-off, no-key guard, Tavily boost+validation+cache, fallbacks |
+| `test_paper_module.py` | 4 | writeup/paper: registration, manifest, newest-folder resolution, argument errors |
+| `test_legacy_deprecation.py` | 2 | legacy improve env pair: DeprecationWarning fires / stays silent |
+| `test_novelty.py` | 1 | novelty loop survives empty paper search (regression) |
 | `test_loop_guard.py` | 10 | StageGuard failures, repeats, time budget |
 | `test_obsidian_notes.py` | 8 | Note writing, status updates, journal |
-| `test_research_quality.py` | 15 | Welch z, sanity check, seed aggregation |
+| `test_research_quality.py` | 16 | Welch z, sanity check, seed aggregation, run_meta incl. no-pip venv |
 | `test_settings.py` | 7 | .env parsing, mask_secret, vault path |
 | `test_llm_and_openrouter.py` | 8 | OpenRouter catalog, JSON extraction |
 | `test_skeleton.py` | 6 | generate/skeleton: files, baseline, self-heal, validation |
@@ -446,9 +498,19 @@ python tests/test_smoke.py
 
 ### CI
 
-GitHub Actions runs on push/PR:
-- **Python job:** `pip install -r requirements.txt pytest` → `pytest tests/`
-- **TUI job:** `bun install` → `bun run typecheck` → `bun test`
+GitHub Actions runs on push/PR across a matrix (Linux + Windows; Python
+3.11 + 3.12):
+- **Lint job:** `ruff check` over `ai_scientist`, `tests`, and the two CPU
+  templates.
+- **Python job:** `pip install -e . && pip install -r requirements-dev.txt` →
+  `pytest tests/ --cov=ai_scientist --cov-fail-under=55`, then the **offline
+  template canary** (real `experiment.py` + `check_run.py` + `plot.py` per CPU
+  template).
+- **TUI job:** `bun install` → `bun run typecheck` → `bun test`.
+- **Live canary** (`.github/workflows/live-canary.yml`, manual): ideas →
+  novelty against a real free OpenRouter model; auto-skips without the
+  `OPENROUTER_API_KEY` secret. Full-loop verification is a manual gate via
+  `docs/RUNBOOK-E2E.md`.
 
 ---
 
@@ -542,11 +604,18 @@ results/
 
 | Issue | Severity | Status |
 |-------|----------|--------|
-| `google.generativeai` deprecated | MEDIUM | FutureWarning, will break eventually |
 | LaTeX required for writeup/review | LOW | Graceful degradation without it |
-| Only 1 template shipped (nanoGPT_lite) | LOW | Others require manual setup |
-| No integration tests for perform_* | MEDIUM | Only pipeline-level tests |
+| 3 templates ship ready (nanoGPT_lite, grokking_toy, parity_transformer) | INFO | More domains welcome |
 | Live log follow is TUI-only | LOW | The headless runner prints a flat event dump (no `-f`) |
+| Experiments stage is CUDA-only (nanoGPT_lite) | MEDIUM | Only the two toy templates run on CPU; nanoGPT_lite needs a GPU |
+
+Resolved in the 2026-09-10 pass:
+
+- `google.generativeai` was declared but never imported (Gemini runs through its
+  OpenAI-compatible endpoint) — the deprecated dependency has been dropped.
+- `perform_*` now have integration tests (`tests/test_perform_integration.py`).
+- `/doctor` (TUI + headless `env`) cross-checks the default model against the
+  provider key it actually needs and probes the Ollama server.
 
 ---
 

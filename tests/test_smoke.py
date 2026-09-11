@@ -35,12 +35,7 @@ def check(name, fn):
 
 
 def t_imports():
-    from ai_scientist import settings, loop_guard, obsidian_notes, llm
-    from ai_scientist.generate_ideas import generate_ideas, check_idea_novelty
-    from ai_scientist.perform_writeup import perform_writeup
-    from ai_scientist.perform_experiments import perform_experiments
-    from ai_scientist.pipeline import PipelineRunner
-    from ai_scientist import discussion
+    from ai_scientist import settings
     assert settings.GUARD.llm_max_tries >= 1
 
 
@@ -83,7 +78,8 @@ def t_guard_repeat():
         raise AssertionError("ожидали StageSkip при 3-м повторе")
     # смена сигнатуры сбрасывает счётчик
     g2 = StageGuard("test-repeat2", max_repeats=3)
-    g2.check_repeat("q", "a"); g2.check_repeat("q", "b")
+    g2.check_repeat("q", "a")
+    g2.check_repeat("q", "b")
     assert g2._sig_count == 1
     os.environ["AISC_INTERACTIVE"] = "auto"
 
@@ -104,7 +100,7 @@ def t_guard_abort_policy():
 
 
 def t_guard_events_logged():
-    from ai_scientist import settings, loop_guard
+    from ai_scientist import settings
     from ai_scientist.loop_guard import StageGuard
     os.environ["AISC_INTERACTIVE"] = "no"
     g = StageGuard("test-events", max_failures=1)
@@ -156,7 +152,8 @@ def t_cleanup_test_notes():
             if p.is_file():
                 p.unlink()
             elif p.is_dir():
-                import shutil; shutil.rmtree(p)
+                import shutil
+                shutil.rmtree(p)
         except OSError as e:
             print(f"  (cleanup пропустил {p.name}: {e})")
     # журнал остаётся — это история; пометим окончание тестов

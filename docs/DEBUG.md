@@ -21,6 +21,12 @@ aiscientist run --template nanoGPT_lite --idea adaptive_block_size \
 aiscientist skeleton --name my_study \
   --description "Compare LR schedules on a tiny transformer" [--no-baseline]
 
+# article builder for the newest (or a specific) run folder:
+# writeup -> review (+ --improve); drives the TUI "Paper" workspace
+aiscientist paper --template grokking_toy \
+  [--folder results/grokking_toy/<ts>_<idea>] [--improve --min-score 6 --rounds 1] \
+  [--model M | --plan-model P --code-model C --review-model R]
+
 # job board / event stream / module catalog
 aiscientist status
 aiscientist logs -j 5

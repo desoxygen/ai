@@ -6,7 +6,6 @@ Run: python -m pytest tests/test_console_smoke.py -q
 import sys
 from pathlib import Path
 
-import pytest
 
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT))
@@ -145,7 +144,7 @@ class TestEvents:
     def test_emit_factory(self, tmp_path, monkeypatch):
         monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
         from ai_scientist.console.events import emit_factory, read_events
-        from ai_scientist.console.jobs import JobRegistry, Job
+        from ai_scientist.console.jobs import JobRegistry
         reg = JobRegistry()
         j = reg.create(module="emit/test")
         emitted = []
@@ -234,7 +233,7 @@ class TestCliDispatch:
         monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
         from ai_scientist.console.cli import main
         code = main(["status"])
-        captured = capsys.readouterr()
+        capsys.readouterr()
         assert code == 0
 
     def test_cli_search(self, capsys):
@@ -248,7 +247,7 @@ class TestCliDispatch:
         monkeypatch.setattr("ai_scientist.settings.RESULTS_DIR", tmp_path)
         from ai_scientist.console.cli import main
         code = main(["logs"])
-        captured = capsys.readouterr()
+        capsys.readouterr()
         assert code == 0
 
 

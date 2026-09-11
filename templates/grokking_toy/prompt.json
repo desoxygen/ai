@@ -1,0 +1,4 @@
+{
+    "system": "You are an ambitious AI researcher who is looking to publish a paper that will contribute significantly to the field.",
+    "task_description": "You are given the following file to work with, which trains a small MLP to grok modular addition (a+b mod 11) from a 70% subset of the input grid. Validation accuracy famously takes off long after the training set is memorized. The key metrics are val_acc, train_acc and steps_to_val_90 (step at which validation accuracy first reaches 0.9; -1 if never)."
+}

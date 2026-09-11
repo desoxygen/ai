@@ -7,7 +7,6 @@ to be used with the "openrouter/" prefix understood by ai_scientist.llm.
 import json
 import os
 import time
-from pathlib import Path
 
 import requests
 
@@ -17,7 +16,10 @@ MODELS_URL = "https://openrouter.ai/api/v1/models"
 CACHE = settings.RESULTS_DIR / "openrouter_models.json"
 CACHE_TTL = 3600
 
-STATIC_FREE_FALLBACK = "openrouter/z-ai/glm-5.2:free"
+STATIC_FREE_FALLBACK = "openrouter/google/gemma-4-26b-a4b-it:free"
+# NOTE: OpenRouter's free lineup changes often (e.g. z-ai/glm-5.2:free vanished
+# from the live catalog during the 2026-09-10 E2E run). Only used when the
+# catalog is unreachable; /models (TUI) always shows what is actually free now.
 
 
 def list_models(force=False):

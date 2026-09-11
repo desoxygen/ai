@@ -33,9 +33,10 @@ Be concise: prefer a few sharp paragraphs over long essays, unless asked to elab
 
 class DiscussionSession:
     def __init__(self, client=None, model=None, topic: str = "", template: str = ""):
+        from ai_scientist import openrouter as _orr
         self.model = model or os.environ.get("AISC_DISCUSS_MODEL") \
             or os.environ.get("AISC_DEFAULT_MODEL") \
-            or "openrouter/z-ai/glm-5.2:free"
+            or _orr.STATIC_FREE_FALLBACK
         self.client, self.client_model = (None, None)
         self.client_ready = False
         self.topic = topic
@@ -134,7 +135,7 @@ def run_repl(session: DiscussionSession = None):
             console.print(Markdown(session.load_template_context(cmd[1].strip())))
         elif cmd[0] == "/idea":
             try:
-                with open(osp.join("templates", session.template or ".", "ideas.json")) as f:
+                with open(osp.join("templates", session.template or ".", "ideas.json"), encoding="utf-8") as f:
                     ideas = json.load(f)
                 idx = int(cmd[1]) - 1 if len(cmd) > 1 else None
                 idea = ideas[idx] if idx is not None else ideas[-1]

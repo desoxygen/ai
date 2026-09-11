@@ -1,5 +1,4 @@
 """Тесты дискуссии (интерактивный исследовательский REPL)."""
-from ai_scientist import discussion
 from ai_scientist.discussion import DiscussionSession
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-scientist"
-version = "0.1b2"
+version = "0.2b3"
 description = "AI-Scientist: консоль-лаборатория для исследования"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,8 +14,8 @@ dependencies = [
   "aider-chat",
   "backoff",
   "openai",
-  "google-generativeai",
   "requests",
+  "pyalex",  # novelty engine: --engine openalex
   "rich",
   "questionary",
   "prompt_toolkit",
@@ -39,3 +39,15 @@ aiscientist = "ai_scientist.console.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ai_scientist", "ai_scientist.*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["data", "example_papers", "review_iclr_bench", "templates", ".venv"]
+
+[tool.ruff.lint]
+# E4/E7/E9 = style + real errors, F = pyflakes (unused imports, undefined
+# names, f-string issues). Kept conservative so legacy science code is not
+# churned; E731 (lambda-assign) and E741 (ambiguous l/I/O) are allowed.
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E731", "E741"]

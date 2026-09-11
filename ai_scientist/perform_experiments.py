@@ -111,7 +111,7 @@ def run_experiment(folder_name, run_num, timeout=7200, deadline=0.0):
                 next_prompt = f"Run failed with the following error {stderr_output}"
                 return result.returncode, next_prompt
 
-            with open(osp.join(cwd, f"run_{run_num}", "final_info.json"), "r") as f:
+            with open(osp.join(cwd, f"run_{run_num}", "final_info.json"), "r", encoding="utf-8") as f:
                 per_seed_results.append(json.load(f))
         except TimeoutExpired:
             print(f"Run {run_num} timed out after {timeout} seconds")
@@ -127,7 +127,7 @@ def run_experiment(folder_name, run_num, timeout=7200, deadline=0.0):
             with open(osp.join(cwd, f"run_{run_num}", "final_info.json"), "w") as f:
                 json.dump(merged, f, indent=4)
 
-    with open(osp.join(cwd, f"run_{run_num}", "final_info.json"), "r") as f:
+    with open(osp.join(cwd, f"run_{run_num}", "final_info.json"), "r", encoding="utf-8") as f:
         results = json.load(f)
     results = {k: v["means"] for k, v in results.items()}
 
@@ -149,9 +149,11 @@ If you are finished with experiments, respond with 'ALL_COMPLETED'."""
 # RUN PLOTTING
 def run_plotting(folder_name, timeout=600):
     cwd = osp.abspath(folder_name)
-    # LAUNCH COMMAND
+    # LAUNCH COMMAND — same rule as run_experiment: always the pipeline's own
+    # interpreter, a bare "python" may be a different install without
+    # matplotlib/numpy on PATH (classic Windows venv breakage).
     command = [
-        "python",
+        sys.executable,
         "plot.py",
     ]
     try:
@@ -206,7 +208,7 @@ def perform_experiments(idea, folder_name, coder, baseline_results, deadline=0.0
             # verdict is fed back so the coder can double-check, and stored
             # for the writeup.
             try:
-                with open(osp.join(folder_name, f"run_{run}", "final_info.json")) as f:
+                with open(osp.join(folder_name, f"run_{run}", "final_info.json"), encoding="utf-8") as f:
                     run_info = json.load(f)
                 verdict = sanity_check(baseline_results, run_info)
                 write_sanity(folder_name, run, verdict)
@@ -227,8 +229,10 @@ def perform_experiments(idea, folder_name, coder, baseline_results, deadline=0.0
         else:
             current_iter += 1
             # Loop protection: the same error repeating means the coder is
-            # going in circles — the guard will ask the user.
-            guard.check_repeat(f"run{run}-error", next_prompt[:200])
+            # going in circles — the guard will ask the user. The key must be
+            # run-number-INDEPENDENT, otherwise the signature resets on every
+            # new run and the identical error can never escalate.
+            guard.check_repeat("run-error", next_prompt[:200])
     if current_iter >= MAX_ITERS:
         print("Not all experiments completed.")
         return False

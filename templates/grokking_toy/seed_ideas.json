@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "weight_decay_sweep",
+    "Title": "Weight Decay Drives Grokking Velocity on Modular Addition",
+    "Experiment": "Sweep AdamW weight decay over {0.01, 0.1, 1.0, 3.0} while keeping everything else fixed. Report steps_to_val_90 and final val_acc per setting; fit a simple relation between weight decay and grokking onset.",
+    "Interestingness": 7,
+    "Feasibility": 9,
+    "Novelty": 5
+  },
+  {
+    "Name": "cosine_lr_schedule",
+    "Title": "Cosine Learning-Rate Decay Accelerates Grokking on Modular Addition",
+    "Experiment": "Replace the constant learning rate with a cosine schedule (with and without warmup). Compare steps_to_val_90 and final val_acc against the constant-LR baseline; also try a schedule that increases LR late in training.",
+    "Interestingness": 6,
+    "Feasibility": 9,
+    "Novelty": 4
+  },
+  {
+    "Name": "train_subset_size",
+    "Title": "How Small Can the Training Subset Be Before Grokking Disappears?",
+    "Experiment": "Vary TRAIN_FRACTION over {0.3, 0.5, 0.7, 0.9} and track whether val_acc still takes off, and at what step. Identify the subset size below which grokking fails entirely within the step budget.",
+    "Interestingness": 7,
+    "Feasibility": 9,
+    "Novelty": 5
+  }
+]

@@ -16,13 +16,15 @@ import { Dashboard, sortPanels, type DashPanel } from "./components/Dashboard.ts
 import { IdeasBrowser } from "./components/IdeasBrowser.tsx"
 import { EMPTY_SYS, subscribeProcs, type SysStats } from "./lib/sysmon.ts"
 import { ArticleReader } from "./components/ArticleReader.tsx"
+import { PaperWorkspace } from "./components/PaperWorkspace.tsx"
 import { articleFor } from "./lib/articles.ts"
 import { Explorer } from "./components/Explorer.tsx"
 import { NotesBoard, type NotePrompt } from "./components/NotesBoard.tsx"
 import { AgentsWorkspace } from "./components/AgentsWorkspace.tsx"
 import { createResponse, type AgentEvent } from "./lib/agent.ts"
-import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startRun as startAisRun, startSkeleton as startAisSkeleton, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
-import { apiKey, chatComplete, llmBlockedReason, llmReady, resolveModel, pipelineModel, streamChat, cachedModels, fetchModels, activeRouterId, hasEnv, routerLabel, setActiveRouter, ROUTERS, type ChatMsg } from "./lib/llm.ts"
+import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startRun as startAisRun, startSkeleton as startAisSkeleton, startPaper as startAisPaper, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
+import { latestPaperJob, paperProgress } from "./lib/paper.ts"
+import { apiKey, chatComplete, llmBlockedReason, llmReady, resolveModel, pipelineModel, streamChat, cachedModels, fetchModels, activeRouterId, hasEnv, routerLabel, setActiveRouter, pipelineModelStatus, configuredPipelineModel, ROUTERS, type ChatMsg } from "./lib/llm.ts"
 import { createProject, validateName, type NewProjectInput } from "./lib/newproject.ts"
 import { generateAgentsMd } from "./lib/initmd.ts"
 import { openInEditor } from "./lib/editor.ts"
@@ -135,7 +137,7 @@ interface NewProjectState {
   error?: string
 }
 
-type Ws = "chat" | "dash" | "expl" | "notes" | "agents" | "article"
+type Ws = "chat" | "dash" | "expl" | "notes" | "agents" | "article" | "paper"
 
 interface DlgEntry {
   name: string
@@ -165,6 +167,7 @@ interface RunSlot {
 
 const SLASH: SlashItem[] = [
   { name: "/run", desc: "start AI-Scientist pipeline (/run <template>)" },
+  { name: "/paper", desc: "write/review the article for the newest run (/paper [template])" },
   { name: "/project", desc: "switch active research project" },
   { name: "/new-project", desc: "create a new research project (wizard)" },
   { name: "/routers", desc: "switch LLM router (OpenRouter, Anthropic, OpenAI, …)" },
@@ -1330,6 +1333,20 @@ export function App() {
 
   const articleDoc = useMemo(() => articleFor(projectName), [projectName, aisTick])
 
+  // Paper workspace: newest paper job (writeup/paper), its event stream,
+  // derived section states, and the compiled PDF path if one exists.
+  const paperView = useMemo(() => {
+    const j = latestPaperJob(store.jobs)
+    const evs = j ? store.events.get(j.id) ?? readEvents(j.id) : []
+    const prog = paperProgress(evs)
+    let pdfPath = ""
+    if (prog.folder && prog.idea) {
+      const cand = join(PROJECT_ROOT, prog.folder, `${prog.idea}.pdf`)
+      if (existsSync(cand)) pdfPath = cand
+    }
+    return { job: j, events: evs, running: !!j && j.status === "running", pdfPath }
+  }, [aisTick, store])
+
   const refreshProjects = useCallback(() => setProjectsList(listProjects()), [])
   useEffect(() => {
     let alive = true
@@ -1711,6 +1728,32 @@ export function App() {
     [pushStatic, showToast, store],
   )
 
+  const doPaper = useCallback(
+    async (template: string, improve?: string) => {
+      const prevMax = store.jobs.reduce((m, j) => Math.max(m, j.id), 0)
+      const improveCfg = improve ?? settings.improve ?? "off"
+      const h = startAisPaper({ template, improve: improveCfg })
+      const tail = /^on:/.test(improveCfg) ? ` --improve (${improveLabel(improveCfg)})` : ""
+      pushStatic(`Launching paper builder: aiscientist paper --template ${template} (writeup -> review)${tail}\n`, "paper")
+      h.child.on("error", (e) => showToast(`spawn failed: ${String((e as Error).message ?? e)} - set $AISC_PYTHON`, "err"))
+      const jid = await waitJobId(prevMax)
+      if (jid === -1) {
+        showToast("no new job appeared in results/jobs.jsonl", "warn")
+        return
+      }
+      ownJobsRef.current.add(jid)
+      lastSeenRef.current.set(jid, 0)
+      handlesRef.current.set(jid, h)
+      h.child.on("close", () => handlesRef.current.delete(jid))
+      store.refresh()
+      setWs("paper")
+      setStarted(true)
+      startedRef.current = true
+      showToast(`paper job attached: #${jid}`, "ok")
+    },
+    [pushStatic, showToast, store],
+  )
+
   const modifiedFiles: FileRow[] = useMemo(() => {
     const out: FileRow[] = []
     for (const m of msgs) {
@@ -1794,6 +1837,26 @@ export function App() {
             improveForRun = nxt && !nxt.startsWith("--") ? parseImprove(nxt) ?? "on:6:1" : "on:6:1"
           }
           void doRun(args[0], args.includes("--model") ? args[args.indexOf("--model") + 1] : undefined, improveForRun)
+          return true
+        }
+        case "paper": {
+          const tpls = listTemplates()
+          const target = args[0] || projectName
+          if (!target) {
+            pushStatic(`usage: /paper <template> — templates: ${tpls.join(", ")} (or select a project first)\n`, "help")
+            return true
+          }
+          if (!tpls.includes(target)) {
+            pushStatic(`Unknown template "${target}" — available: ${tpls.join(", ")}\n`, "error")
+            return true
+          }
+          let improveForPaper: string | undefined
+          const impIdx = args.indexOf("--improve")
+          if (impIdx >= 0) {
+            const nxt = args[impIdx + 1]
+            improveForPaper = nxt && !nxt.startsWith("--") ? parseImprove(nxt) ?? "on:6:1" : "on:6:1"
+          }
+          void doPaper(target, improveForPaper)
           return true
         }
         case "skeleton": {
@@ -1900,6 +1963,7 @@ export function App() {
           const editor = process.env.EDITOR || process.env.VISUAL || (process.platform === "win32" ? "notepad (default)" : "nvim (default)")
           const rows: string[] = [
             `llm key/router: ${hasKey ? `OK (${routerLabel()})` : `MISSING — ${llmBlockedReason()}`}`,
+            `pipeline model: ${pipelineModelStatus(configuredPipelineModel())}`,
             `obsidian vault: ${vault.startsWith("NOT SET") ? vault : `OK (${vault})`}`,
             `editor:         ${editor}`,
             `python:         ${process.env.AISC_PYTHON || "python"}`,
@@ -1909,7 +1973,13 @@ export function App() {
             `baseline:       ${projectName ? (existsSync(join(PROJECT_ROOT, "templates", projectName, "run_0", "final_info.json")) ? `OK (templates/${projectName}/run_0)` : `MISSING — run /skeleton ${projectName}`) : "no project selected"}`,
           ]
           const probe = (cmd: string) => runShell(cmd, process.cwd(), 8000).then((r) => `${cmd}: ${r.code === 0 ? "OK" : "NOT FOUND"}`)
-          void Promise.all([probe("python --version"), probe("pdflatex --version"), probe("aider --version")]).then((checks) => {
+          const pm = configuredPipelineModel()
+          const extraChecks: Promise<string>[] = pm.startsWith("ollama/")
+            ? [fetch((process.env.OLLAMA_HOST || "http://localhost:11434") + "/api/tags", { signal: AbortSignal.timeout(1500) })
+              .then((r) => (r.ok ? "ollama server: OK" : `ollama server: HTTP ${r.status}`))
+              .catch(() => "ollama server: NOT REACHABLE — run `ollama serve` or set OLLAMA_HOST")]
+            : []
+          void Promise.all([probe("python --version"), probe("pdflatex --version"), probe("aider --version"), ...extraChecks]).then((checks) => {
             pushStatic(["environment:", ...rows, ...checks].map((l) => `  ${l}`).join("\n") + "\n", "doctor")
           })
           return true
@@ -2017,7 +2087,7 @@ export function App() {
         }
         case "help":
           pushStatic(
-              "workspaces: tab cycle · 1 Dashboard (главный экран) · 2 Chat · 3 Explorer · 4 Notes · 5 Agents board · 6 Article\n" +
+              "workspaces: tab cycle · 1 Dashboard (главный экран) · 2 Chat · 3 Explorer · 4 Notes · 5 Agents board · 6 Article · 7 Paper (сборка статьи)\n" +
                "research menu on boot: Shift+P open project · Shift+N new project · Shift+R run pipeline · Shift+D dashboard · Shift+I init\n" +
                "dashboard keys: a article · x stop/kill process · d remove job record · enter events · r re-run\n" +
                "notes keys: ↑↓ select · l color · L clear · enter edit · n new · x del · / filter · t ideas\n" +
@@ -2631,8 +2701,8 @@ export function App() {
       }
     }
 
-    if (!k.ctrl && !k.meta && /^[123456]$/.test(k.name ?? "") && (ws !== "chat" || value === "")) {
-      const target = (["dash", "chat", "expl", "notes", "agents", "article"] as const)[Number(k.name) - 1]
+    if (!k.ctrl && !k.meta && /^[1234567]$/.test(k.name ?? "") && (ws !== "chat" || value === "")) {
+      const target = (["dash", "chat", "expl", "notes", "agents", "article", "paper"] as const)[Number(k.name) - 1]
       if (target !== "agents") closeAgentPrompt()
       setWs(target)
       if (target !== "chat") {
@@ -2664,6 +2734,22 @@ export function App() {
       else if (k.name === "g" && k.shift) to(max)
       k.preventDefault()
       return
+    }
+
+    if (ws === "paper" && !dlg && !busy && !k.ctrl && !k.meta) {
+      if (k.name === "p") {
+        if (projectName) void doPaper(projectName)
+        else showToast("select a project first (Shift+P)", "warn")
+        k.preventDefault()
+        return
+      }
+      if (k.name === "a" || k.name === "return") {
+        setWs("article")
+        setStarted(true)
+        startedRef.current = true
+        k.preventDefault()
+        return
+      }
     }
 
     if (ws === "dash" && !dlg && !busy && !k.ctrl && !k.meta && k.name !== "tab") {
@@ -2991,7 +3077,7 @@ export function App() {
     }
 
     if (k.name === "tab" && !k.shift) {
-      const order = ["chat", "dash", "expl", "notes", "agents", "article"] as const
+      const order = ["chat", "dash", "expl", "notes", "agents", "article", "paper"] as const
       const next = order[(order.indexOf(ws) + 1) % order.length]
       if (next !== "agents") closeAgentPrompt()
       setWs(next)
@@ -3306,6 +3392,16 @@ export function App() {
             }}
           />
         )}
+        {ws === "paper" && (
+          <PaperWorkspace
+            project={projectName}
+            job={paperView.job}
+            events={paperView.events}
+            pdfPath={paperView.pdfPath}
+            availW={size.w}
+            running={paperView.running}
+          />
+        )}
         {ws === "article" && (
           <ArticleReader
             title={articleDoc?.title ?? (projectName ? `no document for «${projectName}»` : "no project selected")}
@@ -3501,7 +3597,7 @@ Pick a project with Shift+P, create one with Shift+N, or open the project README
 
 function TabStrip({ ws, project, onPick, running }: { ws: Ws; project: string; onPick: (w: Ws) => void; running: number }) {
   const tab = (id: Ws, key: string, label: string) => (
-    <box flexDirection="row" onMouseUp={() => onPick(id)} backgroundColor={ws === id ? C.element : undefined}>
+    <box flexDirection="row" flexShrink={0} onMouseUp={() => onPick(id)} backgroundColor={ws === id ? C.element : undefined}>
       <text>
         <span fg={ws === id ? C.primary : C.dim}>{` ${ws === id ? "▮" : "▯"} ${key} `}</span>
         <b fg={ws === id ? C.primary : C.faint}>{label}</b>
@@ -3518,6 +3614,7 @@ function TabStrip({ ws, project, onPick, running }: { ws: Ws; project: string; o
       {tab("notes", "4", "Notes")}
       {tab("agents", "5", "Agents")}
       {tab("article", "6", "Article")}
+      {tab("paper", "7", "Paper")}
       <box flexGrow={1} />
       <text>
         {project && (

@@ -87,7 +87,7 @@ def generate_ideas(
     if skip_generation:
         # Load existing ideas from file
         try:
-            with open(osp.join(base_dir, "ideas.json"), "r") as f:
+            with open(osp.join(base_dir, "ideas.json"), "r", encoding="utf-8") as f:
                 ideas = json.load(f)
             print("Loaded existing ideas:")
             for idea in ideas:
@@ -99,15 +99,15 @@ def generate_ideas(
             print("Error decoding existing ideas. Generating new ideas.")
 
     idea_str_archive = []
-    with open(osp.join(base_dir, "seed_ideas.json"), "r") as f:
+    with open(osp.join(base_dir, "seed_ideas.json"), "r", encoding="utf-8") as f:
         seed_ideas = json.load(f)
     for seed_idea in seed_ideas:
         idea_str_archive.append(json.dumps(seed_idea))
 
-    with open(osp.join(base_dir, "experiment.py"), "r") as f:
+    with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
         code = f.read()
 
-    with open(osp.join(base_dir, "prompt.json"), "r") as f:
+    with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
         prompt = json.load(f)
 
     idea_system_prompt = prompt["system"]
@@ -220,16 +220,16 @@ def generate_next_idea(
     print(f"Generating idea {original_archive_size + 1}")
 
     if len(prev_idea_archive) == 0:
-        print(f"First iteration, taking seed ideas")
+        print("First iteration, taking seed ideas")
         # seed the archive on the first run with pre-existing ideas
-        with open(osp.join(base_dir, "seed_ideas.json"), "r") as f:
+        with open(osp.join(base_dir, "seed_ideas.json"), "r", encoding="utf-8") as f:
             seed_ideas = json.load(f)
         for seed_idea in seed_ideas[:1]:
             idea_archive.append(seed_idea)
     else:
-        with open(osp.join(base_dir, "experiment.py"), "r") as f:
+        with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
             code = f.read()
-        with open(osp.join(base_dir, "prompt.json"), "r") as f:
+        with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
             prompt = json.load(f)
         idea_system_prompt = prompt["system"]
 
@@ -448,9 +448,9 @@ def check_idea_novelty(
         max_num_iterations=10,
         engine="semanticscholar",
 ):
-    with open(osp.join(base_dir, "experiment.py"), "r") as f:
+    with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
         code = f.read()
-    with open(osp.join(base_dir, "prompt.json"), "r") as f:
+    with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
         prompt = json.load(f)
         task_description = prompt["task_description"]
 
@@ -518,7 +518,7 @@ def check_idea_novelty(
                             }
 
                 paper_strings = []
-                for i, paper in enumerate(papers):
+                for i, paper in enumerate(papers or []):
                     paper_strings.append(
                         """{i}: {title}. {authors}. {venue}, {year}.\nNumber of citations: {cites}\nAbstract: {abstract}""".format(
                             i=i,

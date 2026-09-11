@@ -225,7 +225,7 @@ def note_llm_failure(model: str, exc: Exception):
     if settings.is_interactive():
         _warn(f"LLM {model} падает {streak} раз подряд: {_llm_last_error[:200]}")
         answer = _ask("Что делать?", [
-            f"↻  Продолжить попытки",
+            "↻  Продолжить попытки",
             "✖  Прервать весь запуск",
         ])
         if answer.startswith("✖"):

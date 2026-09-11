@@ -29,6 +29,10 @@ MANIFEST = {
                     "choices": ["on", "off"], "default": "off"},
         "IMPROVE_MIN_SCORE": {"required": False, "type": "int", "default": 6},
         "IMPROVE_ROUNDS": {"required": False, "type": "int", "default": 1},
+        # task-role models; empty = AISC_MODEL_* env / catalog auto-pick
+        "PLAN_MODEL": {"required": False, "type": "str", "default": ""},
+        "CODE_MODEL": {"required": False, "type": "str", "default": ""},
+        "REVIEW_MODEL": {"required": False, "type": "str", "default": ""},
     },
 }
 
@@ -76,6 +80,10 @@ def run(options, job, emit, stop_event=None):
     improvement = str(options.get("IMPROVE") or "off").lower() in ("on", "true", "1", "yes")
     improve_min_score = float(options.get("IMPROVE_MIN_SCORE") or 6)
     improve_rounds = int(options.get("IMPROVE_ROUNDS") or 1)
+    models = {k.lower(): (options.get(v) or "").strip()
+              for k, v in (("plan", "PLAN_MODEL"), ("code", "CODE_MODEL"),
+                           ("review", "REVIEW_MODEL"))}
+    models = {k: v for k, v in models.items() if v}
 
     runner = PipelineRunner(
         template, model,
@@ -84,6 +92,7 @@ def run(options, job, emit, stop_event=None):
         emit=emit, stop_event=stop_event, idea_filter=idea_filter,
         improvement=improvement,
         improve_min_score=improve_min_score, improve_rounds=improve_rounds,
+        models=models,
     )
     summary = runner.run()
     ok = (not summary.get("aborted")) and (not _has_failed(summary))

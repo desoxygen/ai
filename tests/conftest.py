@@ -1,5 +1,4 @@
 """Общие фикстуры pytest: временный vault Obsidian, headless-режим guard, fake LLM."""
-import os
 import sys
 from pathlib import Path
 

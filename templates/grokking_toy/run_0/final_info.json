@@ -1,0 +1,22 @@
+{
+    "val_acc": {
+        "means": 1.0,
+        "stderrs": 0.0
+    },
+    "train_acc": {
+        "means": 1.0,
+        "stderrs": 0.0
+    },
+    "steps_to_val_90": {
+        "means": 9150.0,
+        "stderrs": 1749.9999999999998
+    },
+    "final_train_loss": {
+        "means": 1.07501182355918e-06,
+        "stderrs": 8.44398755361908e-08
+    },
+    "total_train_time": {
+        "means": 31.118924140930176,
+        "stderrs": 0.47446274757385254
+    }
+}

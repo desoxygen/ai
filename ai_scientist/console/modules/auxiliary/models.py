@@ -17,8 +17,6 @@ MANIFEST = {
 
 
 def run(options, job, emit, stop_event=None):
-    from ai_scientist import settings
-    from ai_scientist.console.i18n import get as _t
     from ai_scientist import openrouter
 
     current = os.environ.get("AISC_DEFAULT_MODEL", "")
@@ -50,7 +48,7 @@ def run(options, job, emit, stop_event=None):
                 emit("system", "log", f"  {openrouter.describe(m)}")
 
         if paid and not query:
-            emit("system", "log", f"\n--- Top paid models (first 15) ---")
+            emit("system", "log", "\n--- Top paid models (first 15) ---")
             for m in paid[:15]:
                 emit("system", "log", f"  {openrouter.describe(m)}")
         elif paid and query:

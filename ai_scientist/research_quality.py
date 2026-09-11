@@ -18,7 +18,6 @@ import json
 import os
 import os.path as osp
 import platform
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -164,11 +163,14 @@ def write_run_meta(folder_name: str, *, model: str, run_id: str,
             "AISC_SEED", "AISC_EXP_SEEDS", "AISC_IDEA_BUDGET_MINUTES",
             "AISC_REVIEW_MIN_SCORE", "AISC_REVIEW_FIX_ITER") if os.environ.get(k)},
     }
+    # Package versions via importlib.metadata — works in venvs WITHOUT pip
+    # (uv-created envs have no pip module; shelling out silently produced an
+    # empty pip_freeze and killed reproducibility snapshots).
     try:
-        pip = subprocess.run([sys.executable, "-m", "pip", "freeze"],
-                             capture_output=True, text=True, timeout=60)
-        if pip.returncode == 0:
-            meta["pip_freeze"] = pip.stdout.strip().splitlines()
+        from importlib.metadata import distributions
+        meta["pip_freeze"] = sorted(
+            f"{d.metadata['Name']}=={d.version}"
+            for d in distributions() if d.metadata and d.metadata["Name"])
     except Exception:
         pass
     path = osp.join(folder_name, "run_meta.json")

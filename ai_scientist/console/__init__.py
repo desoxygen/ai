@@ -6,7 +6,7 @@
 """
 import sys
 
-VERSION = "0.1-beta2"
+VERSION = "0.2-beta3"
 __version__ = VERSION
 
 

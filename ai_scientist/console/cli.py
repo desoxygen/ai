@@ -84,6 +84,12 @@ def cli_run(argv):
                    help="improve only when review score is below this (0-10)")
     p.add_argument("--rounds", type=int, default=1,
                    help="max improvement rounds")
+    p.add_argument("--plan-model", default="",
+                   help="model for ideas/novelty (empty = AISC_MODEL_PLAN/auto)")
+    p.add_argument("--code-model", default="",
+                   help="model for aider code edits (empty = AISC_MODEL_CODE/auto)")
+    p.add_argument("--review-model", default="",
+                   help="model for paper review (empty = AISC_REVIEW_MODEL/auto)")
     a = p.parse_args(argv)
 
     mod = ModuleRegistry().get("pipeline/run")
@@ -97,6 +103,8 @@ def cli_run(argv):
         "STAGES": a.stages, "ENGINE": a.engine,
         "IMPROVE": "on" if a.improve else "off",
         "IMPROVE_MIN_SCORE": a.min_score, "IMPROVE_ROUNDS": a.rounds,
+        "PLAN_MODEL": a.plan_model, "CODE_MODEL": a.code_model,
+        "REVIEW_MODEL": a.review_model,
     }
     jobs = JobRegistry()
     return execute_job(mod, options, jobs, printer=_print_event)
@@ -123,6 +131,44 @@ def cli_skeleton(argv):
     options = {
         "NAME": a.name, "DESCRIPTION": a.description, "MODEL": a.model,
         "RUN_BASELINE": "off" if a.no_baseline else "on",
+    }
+    jobs = JobRegistry()
+    return execute_job(mod, options, jobs, printer=_print_event)
+
+
+def cli_paper(argv):
+    import argparse
+    from ai_scientist.console.jobs import JobRegistry
+    from ai_scientist.console.registry import ModuleRegistry
+    from ai_scientist.console.runner import execute_job
+
+    p = argparse.ArgumentParser(prog="aiscientist paper")
+    p.add_argument("--template", required=True, help=_t("cli_template_help"))
+    p.add_argument("--folder", default="",
+                   help="run folder results/<template>/<ts>_<idea> (empty = newest)")
+    p.add_argument("--stages", default="writeup,review")
+    p.add_argument("--model", default="", help=_t("cli_model_help"))
+    p.add_argument("--plan-model", default="", help="model for section planning/citations")
+    p.add_argument("--code-model", default="", help="model for aider tex edits")
+    p.add_argument("--review-model", default="", help="model for the review pass")
+    p.add_argument("--engine", default="semanticscholar",
+                   choices=["semanticscholar", "openalex"])
+    p.add_argument("--improve", action="store_true",
+                   help="revise the paper from reviewer feedback and re-review")
+    p.add_argument("--min-score", type=float, default=6.0)
+    p.add_argument("--rounds", type=int, default=1)
+    a = p.parse_args(argv)
+
+    mod = ModuleRegistry().get("writeup/paper")
+    if mod is None:
+        print(_t("cli_module_not_found"), file=sys.stderr)
+        return 1
+    options = {
+        "TEMPLATE": a.template, "FOLDER": a.folder, "STAGES": a.stages,
+        "MODEL": a.model, "PLAN_MODEL": a.plan_model, "CODE_MODEL": a.code_model,
+        "REVIEW_MODEL": a.review_model, "ENGINE": a.engine,
+        "IMPROVE": "on" if a.improve else "off",
+        "IMPROVE_MIN_SCORE": a.min_score, "IMPROVE_ROUNDS": a.rounds,
     }
     jobs = JobRegistry()
     return execute_job(mod, options, jobs, printer=_print_event)
@@ -215,6 +261,7 @@ def main(argv=None) -> int:
         print("Headless/debug (used by the TUI and CI, not an interactive UI):")
         print("  aiscientist -q run --template T [--stages ...] [--improve ...]")
         print("  aiscientist -q skeleton --name N --description D")
+        print("  aiscientist -q paper --template T [--folder F] [--improve ...]")
         print("  aiscientist status | logs [-j ID] | search QUERY")
         return 0
 
@@ -232,6 +279,8 @@ def main(argv=None) -> int:
         return cli_run(rest)
     if cmd in ("skeleton", "generate-skeleton"):
         return cli_skeleton(rest)
+    if cmd == "paper":
+        return cli_paper(rest)
     if cmd == "status":
         return cli_status(rest)
     if cmd == "logs":

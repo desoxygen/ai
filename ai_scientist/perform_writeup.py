@@ -13,13 +13,15 @@ from ai_scientist.loop_guard import StageGuard
 
 
 # GENERATE LATEX
-def generate_latex(coder, folder_name, pdf_file, timeout=30, num_error_corrections=5):
+def generate_latex(coder, folder_name, pdf_file, timeout=None, num_error_corrections=5):
+    if timeout is None:
+        timeout = int(os.environ.get("AISC_LATEX_TIMEOUT", "120"))
     folder = osp.abspath(folder_name)
     cwd = osp.join(folder, "latex")  # Fixed potential issue with path
     writeup_file = osp.join(cwd, "template.tex")
 
     # Check all references are valid and in the references.bib file
-    with open(writeup_file, "r") as f:
+    with open(writeup_file, "r", encoding="utf-8") as f:
         tex_text = f.read()
     cites = re.findall(r"\\cite[a-z]*{([^}]*)}", tex_text)
     references_bib = re.search(
@@ -40,7 +42,7 @@ If so, please modify the citation in template.tex to match the name in reference
             coder.run(prompt)
 
     # Check all included figures are actually in the directory.
-    with open(writeup_file, "r") as f:
+    with open(writeup_file, "r", encoding="utf-8") as f:
         tex_text = f.read()
     referenced_figs = re.findall(r"\\includegraphics.*?{(.*?)}", tex_text)
     all_figs = [f for f in os.listdir(folder) if f.endswith(".png")]
@@ -52,7 +54,7 @@ Please ensure that the figure is in the directory and that the filename is corre
             coder.run(prompt)
 
     # Remove duplicate figures.
-    with open(writeup_file, "r") as f:
+    with open(writeup_file, "r", encoding="utf-8") as f:
         tex_text = f.read()
     referenced_figs = re.findall(r"\\includegraphics.*?{(.*?)}", tex_text)
     duplicates = {x for x in referenced_figs if referenced_figs.count(x) > 1}
@@ -64,7 +66,7 @@ If duplicated, identify the best location for the figure and remove any other.""
             coder.run(prompt)
 
     # Remove duplicate section headers.
-    with open(writeup_file, "r") as f:
+    with open(writeup_file, "r", encoding="utf-8") as f:
         tex_text = f.read()
     sections = re.findall(r"\\section{([^}]*)}", tex_text)
     duplicates = {x for x in sections if sections.count(x) > 1}
@@ -75,24 +77,30 @@ If duplicated, identify the best location for the figure and remove any other.""
 If duplicated, identify the best location for the section header and remove any other."""
             coder.run(prompt)
 
-    # Iteratively fix any LaTeX bugs
-    for i in range(num_error_corrections):
-        # Filter trivial bugs in chktex
-        check_output = os.popen(f"chktex {writeup_file} -q -n2 -n24 -n13 -n1").read()
-        if check_output:
-            prompt = f"""Please fix the following LaTeX errors in `template.tex` guided by the output of `chktek`:
+    # Iteratively fix any LaTeX bugs (only when chktex exists — MiKTeX has none;
+    # without the guard its "command not recognized" noise becomes a fake prompt)
+    if shutil.which("chktex"):
+        for i in range(num_error_corrections):
+            # Filter trivial bugs in chktex
+            check_output = os.popen(f"chktex {writeup_file} -q -n2 -n24 -n13 -n1").read()
+            if check_output:
+                prompt = f"""Please fix the following LaTeX errors in `template.tex` guided by the output of `chktek`:
 {check_output}.
 
 Make the minimal fix required and do not remove or change any packages.
 Pay attention to any accidental uses of HTML syntax, e.g. </end instead of \\end.
 """
-            coder.run(prompt)
-        else:
-            break
+                coder.run(prompt)
+            else:
+                break
+    else:
+        print("chktex not installed — skipping the lint pass (compile will still run).")
     compile_latex(cwd, pdf_file, timeout=timeout)
 
 
-def compile_latex(cwd, pdf_file, timeout=30):
+def compile_latex(cwd, pdf_file, timeout=None):
+    if timeout is None:
+        timeout = int(os.environ.get("AISC_LATEX_TIMEOUT", "120"))
     print("GENERATING LATEX")
 
     commands = [
@@ -401,8 +409,19 @@ Ensure the citation is well-integrated into the text.'''
 
 # PERFORM WRITEUP
 def perform_writeup(
-        idea, folder_name, coder, cite_client, cite_model, num_cite_rounds=20, engine="semanticscholar"
+        idea, folder_name, coder, cite_client, cite_model, num_cite_rounds=20,
+        engine="semanticscholar", progress=None,
 ):
+    """Write the paper section by section. `progress(section, phase)` is an
+    optional callback used by the runner/TUI to show which section is being
+    drafted (phase: 'draft' | 'refine' | 'cite' | 'final' | 'compile')."""
+    def _p(section, phase):
+        if progress is not None:
+            try:
+                progress(section, phase)
+            except Exception:
+                pass
+
     # CURRENTLY ASSUMES LATEX
     abstract_prompt = f"""We've provided the `latex/template.tex` file to the project. We will be filling it in section by section.
 
@@ -415,8 +434,10 @@ Before every paragraph, please include a brief description of what you plan to w
 
 Be sure to first name the file and use *SEARCH/REPLACE* blocks to perform these edits.
 """
-    coder_out = coder.run(abstract_prompt)
-    coder_out = coder.run(
+    _p("Title & Abstract", "draft")
+    coder.run(abstract_prompt)
+    _p("Abstract", "refine")
+    coder.run(
         refinement_prompt.format(section="Abstract")
         .replace(r"{{", "{")
         .replace(r"}}", "}")
@@ -429,6 +450,7 @@ Be sure to first name the file and use *SEARCH/REPLACE* blocks to perform these 
         "Results",
         "Conclusion",
     ]:
+        _p(section, "draft")
         section_prompt = rf"""Please fill in the {section} of the writeup. Some tips are provided below:
 {per_section_tips[section]}
 
@@ -442,8 +464,9 @@ Before every paragraph, please include a brief description of what you plan to w
 
 Be sure to first name the file and use *SEARCH/REPLACE* blocks to perform these edits.
 """
-        coder_out = coder.run(section_prompt)
-        coder_out = coder.run(
+        coder.run(section_prompt)
+        _p(section, "refine")
+        coder.run(
             refinement_prompt.format(section=section)
             .replace(r"{{", "{")
             .replace(r"}}", "}")
@@ -461,12 +484,14 @@ Do not modify `references.bib` to add any new citations, this will be filled in 
 
 Be sure to first name the file and use *SEARCH/REPLACE* blocks to perform these edits.
 """
-    coder_out = coder.run(section_prompt)
+    _p("Related Work", "draft")
+    coder.run(section_prompt)
 
     # Fill paper with cites.
+    _p("Related Work", "cite")
     guard = StageGuard("citations")
     for _ in range(num_cite_rounds):
-        with open(osp.join(folder_name, "latex", "template.tex"), "r") as f:
+        with open(osp.join(folder_name, "latex", "template.tex"), "r", encoding="utf-8") as f:
             draft = f.read()
         prompt, done = get_citation_aider_prompt(
             cite_client, cite_model, draft, _, num_cite_rounds, engine=engine
@@ -484,16 +509,18 @@ Be sure to first name the file and use *SEARCH/REPLACE* blocks to perform these 
             draft = draft.replace(search_str, f"{bibtex_string}{search_str}")
             with open(osp.join(folder_name, "latex", "template.tex"), "w") as f:
                 f.write(draft)
-            coder_out = coder.run(prompt)
+            coder.run(prompt)
         guard.success()
 
-    coder_out = coder.run(
+    _p("Related Work", "refine")
+    coder.run(
         refinement_prompt.format(section="Related Work")
         .replace(r"{{", "{")
         .replace(r"}}", "}")
     )
 
     ## SECOND REFINEMENT LOOP
+    _p("Title", "final")
     coder.run(
         """Great job! Now that there is a complete draft of the entire paper, let's refine each section again.
 First, re-think the Title if necessary. Keep this concise and descriptive of the paper's concept, but try by creative with it."""
@@ -508,7 +535,8 @@ First, re-think the Title if necessary. Keep this concise and descriptive of the
         "Results",
         "Conclusion",
     ]:
-        coder_out = coder.run(
+        _p(section, "final")
+        coder.run(
             second_refinement_prompt.format(
                 section=section, tips=per_section_tips[section]
             )
@@ -516,6 +544,7 @@ First, re-think the Title if necessary. Keep this concise and descriptive of the
             .replace(r"}}", "}")
         )
 
+    _p("Paper", "compile")
     generate_latex(coder, folder_name, f"{folder_name}/{idea['Name']}.pdf")
 
 
@@ -552,7 +581,7 @@ if __name__ == "__main__":
     model = args.model
     writeup_file = osp.join(folder_name, "latex", "template.tex")
     ideas_file = osp.join(folder_name, "ideas.json")
-    with open(ideas_file, "r") as f:
+    with open(ideas_file, "r", encoding="utf-8") as f:
         ideas = json.load(f)
     for idea in ideas:
         if idea["Name"] in idea_name:

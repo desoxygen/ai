@@ -1,6 +1,5 @@
 """Tests for the research quality gates (sanity, stats, budget, learnings)."""
 import json
-import os
 import os.path as osp
 import sys
 
@@ -92,6 +91,16 @@ class TestRunMeta:
         assert meta["seeds_requested"] == 3
         assert len(meta["experiment_sha256_16"]) == 16
         assert "python" in meta
+
+    def test_pip_freeze_populated_without_pip_binary(self, tmp_path, monkeypatch):
+        """uv-created venvs have no pip module; shelling out used to produce an
+        empty pip_freeze and silently gutted the reproducibility snapshot."""
+        monkeypatch.setattr(sys, "executable", str(tmp_path / "python-no-pip"))
+        (tmp_path / "experiment.py").write_text("pass\n")
+        p = write_run_meta(str(tmp_path), model="m", run_id="r", idea_name="i")
+        meta = json.loads(open(p, encoding="utf-8").read())
+        assert len(meta["pip_freeze"]) > 10, "importlib.metadata must fill versions"
+        assert all("==" in e for e in meta["pip_freeze"])
 
 
 class TestLearnings:
