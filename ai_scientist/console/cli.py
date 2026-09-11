@@ -214,6 +214,23 @@ def cli_logs(argv):
     return 0
 
 
+def cli_jobs_purge(argv):
+    """Compact the job journal: drop finished records + their event files."""
+    import argparse
+    from ai_scientist.console.jobs import JobRegistry
+
+    p = argparse.ArgumentParser(prog="aiscientist jobs-purge")
+    p.add_argument("--template", default=None, help="only this template's jobs")
+    a = p.parse_args(argv)
+
+    jobs = JobRegistry()
+    removed = jobs.purge(template=a.template)
+    print(f"[*] purged {len(removed)} job record(s)"
+          + (f" (template={a.template})" if a.template else "")
+          + (f": #{'#'.join(map(str, removed))}" if removed else ""))
+    return 0
+
+
 def cli_search(argv):
     from ai_scientist.console.registry import ModuleRegistry
     query = argv[0] if argv else ""
@@ -262,7 +279,7 @@ def main(argv=None) -> int:
         print("  aiscientist -q run --template T [--stages ...] [--improve ...]")
         print("  aiscientist -q skeleton --name N --description D")
         print("  aiscientist -q paper --template T [--folder F] [--improve ...]")
-        print("  aiscientist status | logs [-j ID] | search QUERY")
+        print("  aiscientist status | logs [-j ID] | jobs-purge [--template T] | search QUERY")
         return 0
 
     if cmd in ("-v", "--version", "version"):
@@ -285,6 +302,8 @@ def main(argv=None) -> int:
         return cli_status(rest)
     if cmd == "logs":
         return cli_logs(rest)
+    if cmd in ("jobs-purge", "purge"):
+        return cli_jobs_purge(rest)
     if cmd == "search":
         return cli_search(rest)
 

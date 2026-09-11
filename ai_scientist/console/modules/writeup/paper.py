@@ -60,7 +60,8 @@ def run(options, job, emit, stop_event=None):
         if not osp.isdir(folder):
             raise ValueError(_t("paper_folder_missing", folder))
     else:
-        results_dir = osp.join(os.environ.get("AISC_RESULTS_DIR", "results"), template)
+        from ai_scientist import settings
+        results_dir = osp.join(str(settings.RESULTS_DIR), template)
         folder = _latest_folder(results_dir)
         if not folder:
             raise ValueError(_t("paper_no_run", results_dir))

@@ -1,0 +1,10 @@
+[
+  {
+    "Name": "playground_seed_1",
+    "Title": "Does adding one quadratic feature fix the moons geometry for logistic regression?",
+    "Experiment": "Append a synthetic feature x1*x2 (and squared terms) to the two-moons input in experiment.py, keep the LR grid {0.1, 0.3}, and compare test_loss/test_acc against the run_0 baseline over the same 3 trials x 3 seeds.",
+    "Interestingness": 4,
+    "Feasibility": 9,
+    "Novelty": 3
+  }
+]

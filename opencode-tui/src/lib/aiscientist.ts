@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, readdirSync, unlinkSync, watch, writeFileSync, type FSWatcher } from "node:fs"
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, readdirSync, statSync, unlinkSync, watch, writeFileSync, type FSWatcher } from "node:fs"
 import { join, resolve } from "node:path"
 
 export interface AisEvent {
@@ -31,6 +31,7 @@ export interface AisJob {
   started_at: string
   finished_at: string
   pid?: number
+  deleted?: boolean
 }
 
 function findRoot(): string {
@@ -66,7 +67,13 @@ export function parseJsonl<T>(text: string): T[] {
 
 export function readJobs(jobsFile = getJobsFile()): AisJob[] {
   try {
-    return parseJsonl<AisJob>(readFileSync(jobsFile, "utf8"))
+    // append-only journal: several lines per id are history, last one wins;
+    // a trailing `deleted: true` record tombstones the id
+    const byId = new Map<number, AisJob>()
+    for (const j of parseJsonl<AisJob>(readFileSync(jobsFile, "utf8"))) {
+      if (j && typeof j.id === "number") byId.set(j.id, j)
+    }
+    return [...byId.values()].filter((j) => !j.deleted)
   } catch {
     return []
   }
@@ -485,28 +492,62 @@ export function killPid(pid: number): void {
   }
 }
 
-function rewriteJobs(jobs: AisJob[], jobsFile = getJobsFile()): void {
+/** Cross-process lock mirroring ai_scientist/console/jobs.py::_ProcLock:
+ *  sidecar `jobs.jsonl.lock`, O_EXCL acquire, stale steal, timeout. */
+function withJobsLock(jobsFile: string, fn: () => void): void {
+  const lock = jobsFile + ".lock"
+  const deadline = Date.now() + 10_000
+  for (;;) {
+    let acquired = false
+    let fd = -1
+    try {
+      fd = openSync(lock, "wx")
+      acquired = true
+    } catch {
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > 30_000) unlinkSync(lock)
+      } catch {}
+      if (Date.now() > deadline) throw new Error(`jobs store lock busy: ${lock}`)
+      Bun.sleepSync(30)
+      continue
+    } finally {
+      if (fd >= 0) closeSync(fd)
+    }
+    if (acquired) break
+  }
   try {
-    writeFileSync(jobsFile, jobs.map((j) => JSON.stringify(j)).join("\n") + "\n")
-  } catch {}
+    fn()
+  } finally {
+    try {
+      unlinkSync(lock)
+    } catch {}
+  }
 }
 
 export function markJobStatus(jobId: number, status: AisJob["status"], jobsFile = getJobsFile()): boolean {
-  const jobs = readJobs(jobsFile)
-  const j = jobs.find((x) => x.id === jobId)
-  if (!j) return false
-  j.status = status
-  if (status === "done" || status === "failed" || status === "aborted") {
-    j.finished_at = new Date().toISOString()
-  }
-  rewriteJobs(jobs, jobsFile)
-  return true
+  let ok = false
+  withJobsLock(jobsFile, () => {
+    const j = readJobs(jobsFile).find((x) => x.id === jobId)
+    if (!j) return
+    const rec = { ...j } as unknown as Record<string, unknown>
+    rec.status = status
+    if (status === "done" || status === "failed" || status === "aborted") {
+      rec.finished_at = new Date().toISOString()
+    }
+    writeFileSync(jobsFile, JSON.stringify(rec) + "\n", { flag: "a" })
+    ok = true
+  })
+  return ok
 }
 
 export function deleteJobRecord(jobId: number, eventsDir: string = getEventsDir(), jobsFile = getJobsFile()): boolean {
-  const jobs = readJobs(jobsFile)
-  if (!jobs.some((j) => j.id === jobId)) return false
-  rewriteJobs(jobs.filter((j) => j.id !== jobId), jobsFile)
+  let ok = false
+  withJobsLock(jobsFile, () => {
+    if (!readJobs(jobsFile).some((j) => j.id === jobId)) return
+    writeFileSync(jobsFile, JSON.stringify({ id: jobId, deleted: true }) + "\n", { flag: "a" })
+    ok = true
+  })
+  if (!ok) return false
   try {
     const p = eventsPath(jobId, eventsDir)
     if (existsSync(p)) unlinkSync(p)

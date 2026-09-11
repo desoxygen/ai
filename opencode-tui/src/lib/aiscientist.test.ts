@@ -1,5 +1,5 @@
-import { afterAll, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, mkdirSync, appendFileSync, rmSync } from "node:fs"
+﻿import { afterAll, expect, test } from "bun:test"
+import { existsSync, mkdtempSync, mkdirSync, appendFileSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createStore, deleteJobRecord, jobStageMap, markJobStatus, parseJsonl, pidAlive, readEvents, readJobs, runArgs, skeletonArgs, type AisEvent, type AisJob } from "./aiscientist.ts"
@@ -91,6 +91,29 @@ test("pidAlive detects this process and rejects garbage", () => {
   expect(pidAlive(process.pid)).toBe(true)
   expect(pidAlive(0)).toBe(false)
   expect(pidAlive(2 ** 30)).toBe(false)
+})
+
+test("readJobs folds append-only history: last record per id wins", () => {
+  const f = join(dir, "fold.jsonl")
+  appendFileSync(f, JSON.stringify(job({ id: 7, status: "running" })) + "\n")
+  appendFileSync(f, JSON.stringify(job({ id: 7, status: "running" })) + "\n") // dup create (the old race)
+  appendFileSync(f, JSON.stringify(job({ id: 7, status: "failed" })) + "\n")
+  appendFileSync(f, JSON.stringify(job({ id: 8 })) + "\n")
+  const jobs = readJobs(f)
+  expect(jobs.length).toBe(2)
+  expect(jobs.find((j) => j.id === 7)?.status).toBe("failed")
+})
+
+test("tombstone hides a job and markJobStatus never rewrites history", () => {
+  appendFileSync(jobsFile, JSON.stringify(job({ id: 9, status: "running" })) + "\n")
+  const before = readFileSync(jobsFile, "utf8").split("\n").filter(Boolean).length
+  expect(markJobStatus(9, "done", jobsFile)).toBe(true)
+  const after = readFileSync(jobsFile, "utf8").split("\n").filter(Boolean).length
+  expect(after).toBe(before + 1) // append-only, not a rewrite
+  expect(deleteJobRecord(9, eventsDir, jobsFile)).toBe(true)
+  expect(readJobs(jobsFile).some((j) => j.id === 9)).toBe(false)
+  // the tombstone stays in the file (id watermark), append-only again
+  expect(readFileSync(jobsFile, "utf8").split("\n").filter(Boolean).length).toBe(after + 1)
 })
 
 test("runArgs wires --improve flags for the CLI", () => {

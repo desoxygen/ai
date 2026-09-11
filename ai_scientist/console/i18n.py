@@ -177,6 +177,10 @@ _translations = {
         "en": 'latest run: %s',
         "ru": 'последний прогон: %s',
     },
+    "job_duplicate_blocked": {
+        "en": 'duplicate: %s for "%s" is already running (job #%s) — the click was ignored',
+        "ru": 'дубль: %s для "%s" уже запущен (job #%s) — повторный запуск отклонён',
+    },
 }
 
 

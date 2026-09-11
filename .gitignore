@@ -174,6 +174,8 @@ ICLR2022-OpenReviewData/
 templates/*/run_ci/
 # draft templates generated during E2E measurement runs (docs/E2E-*.md)
 templates/e2e_grok*/
+# throwaway fixtures from the stress suite (docs/STRESS-TESTS.md)
+templates/stress_*/
 review_iclr_bench/
 example_papers/
 opencode-tui/dbg/

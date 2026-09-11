@@ -14,6 +14,33 @@ from ai_scientist.research_quality import load_learnings
 
 S2_API_KEY = os.getenv("S2_API_KEY")
 
+
+def _load_template_file(base_dir, fname, kind="json"):
+    """Template file with a legible error: stress C2 showed raw
+    "[Errno 2] No such file..." / bare JSONDecodeError reaching the dashboard."""
+    path = osp.join(base_dir, fname)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f) if kind == "json" else f.read()
+    except FileNotFoundError:
+        tpl_name = osp.basename(str(base_dir).rstrip("/\\"))
+        raise FileNotFoundError(
+            f"шаблон '{tpl_name}' неполный: "
+            f"нет файла {fname} — создайте проект через /new-project или /skeleton"
+        ) from None
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"{fname}: некорректный JSON ({e.msg}, строка {e.lineno})"
+        ) from None
+
+
+def _prompt_system(base_dir):
+    prompt = _load_template_file(base_dir, "prompt.json")
+    if not isinstance(prompt, dict) or "system" not in prompt:
+        raise ValueError("prompt.json: нет поля 'system'")
+    return prompt
+
+
 idea_first_prompt = """{task_description}
 <experiment.py>
 {code}
@@ -99,16 +126,13 @@ def generate_ideas(
             print("Error decoding existing ideas. Generating new ideas.")
 
     idea_str_archive = []
-    with open(osp.join(base_dir, "seed_ideas.json"), "r", encoding="utf-8") as f:
-        seed_ideas = json.load(f)
+    seed_ideas = _load_template_file(base_dir, "seed_ideas.json")
     for seed_idea in seed_ideas:
         idea_str_archive.append(json.dumps(seed_idea))
 
-    with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
-        code = f.read()
+    code = _load_template_file(base_dir, "experiment.py", kind="text")
 
-    with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
-        prompt = json.load(f)
+    prompt = _prompt_system(base_dir)
 
     idea_system_prompt = prompt["system"]
 
@@ -222,15 +246,12 @@ def generate_next_idea(
     if len(prev_idea_archive) == 0:
         print("First iteration, taking seed ideas")
         # seed the archive on the first run with pre-existing ideas
-        with open(osp.join(base_dir, "seed_ideas.json"), "r", encoding="utf-8") as f:
-            seed_ideas = json.load(f)
+        seed_ideas = _load_template_file(base_dir, "seed_ideas.json")
         for seed_idea in seed_ideas[:1]:
             idea_archive.append(seed_idea)
     else:
-        with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
-            code = f.read()
-        with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
-            prompt = json.load(f)
+        code = _load_template_file(base_dir, "experiment.py", kind="text")
+        prompt = _prompt_system(base_dir)
         idea_system_prompt = prompt["system"]
 
         for _ in range(max_attempts):
@@ -448,11 +469,11 @@ def check_idea_novelty(
         max_num_iterations=10,
         engine="semanticscholar",
 ):
-    with open(osp.join(base_dir, "experiment.py"), "r", encoding="utf-8") as f:
-        code = f.read()
-    with open(osp.join(base_dir, "prompt.json"), "r", encoding="utf-8") as f:
-        prompt = json.load(f)
-        task_description = prompt["task_description"]
+    code = _load_template_file(base_dir, "experiment.py", kind="text")
+    prompt = _load_template_file(base_dir, "prompt.json")
+    if not isinstance(prompt, dict) or "task_description" not in prompt:
+        raise ValueError("prompt.json: нет поля 'task_description'")
+    task_description = prompt["task_description"]
 
     for idx, idea in enumerate(ideas):
         if "novel" in idea:

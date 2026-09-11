@@ -34,6 +34,12 @@ def execute_job(mod, options, jobs, printer, stop_event=None, job=None) -> int:
             idea=str(options.get("IDEA", "") or ""),
         )
     emit = emit_factory(job, printer)
+    dup = jobs.live_duplicates(mod.name, job.template, exclude_id=job.id)
+    if dup:
+        msg = _t("job_duplicate_blocked", mod.name, job.template, str(dup[-1].id))
+        jobs.update(job, status="failed", started_at=_now(), finished_at=_now())
+        emit("run", "fail", msg, detail={"error": msg, "exit_code": 1, "duplicate_of": dup[-1].id})
+        return 1
     jobs.update(job, status="running", started_at=_now(), pid=os.getpid())
     emit("run", "started", f"job {job.id} started")
     code = 0

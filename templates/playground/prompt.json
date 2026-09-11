@@ -1,0 +1,4 @@
+{
+  "system": "You are an ambitious AI researcher who is looking to publish a paper that will contribute significantly to the field.",
+  "task_description": "You are given experiment.py, which trains a plain-numpy logistic regression on synthetic two-moons data and compares learning rates {0.1, 0.3} over 3 trials x 3 seeds. Key metrics are test_loss, test_acc, best_lr and total_train_time in <out_dir>/final_info.json (shape {metric: {\"means\": float, \"stderrs\": float}}). The experiment must stay CPU-only, deterministic (EXP_SEED / fixed rng), under ~2 minutes, and must never download data from the internet. Propose and implement small modifications (optimizer, features, regularization, dataset geometry) that improve test_acc / lower test_loss versus run_0."
+}

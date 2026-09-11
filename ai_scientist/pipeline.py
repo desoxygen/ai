@@ -17,7 +17,7 @@ import os.path as osp
 import shutil
 import warnings
 
-from ai_scientist import loop_guard, model_router, obsidian_notes
+from ai_scientist import loop_guard, model_router, obsidian_notes, settings
 from ai_scientist.loop_guard import StageGuard, RunAborted, StageSkip
 from ai_scientist.generate_ideas import generate_ideas, check_idea_novelty
 from ai_scientist.llm import create_client
@@ -63,7 +63,9 @@ class PipelineRunner:
                  models: dict = None):
         self.template = template
         self.base_dir = osp.join("templates", template)
-        self.results_dir = osp.join("results", template)
+        # honour AISC_RESULTS_DIR exactly like settings/jobs/events do —
+        # the hard-coded "results" leaked sandboxes into the real repo dir
+        self.results_dir = osp.join(str(settings.RESULTS_DIR), template)
         self.model = model
         # Task-role models (docs/PLAN-PAPER-ROLES-TUI.md §R): explicit per-run
         # `models` dict > AISC_MODEL_* env overrides > (lazy catalog auto-pick).
@@ -274,6 +276,11 @@ class PipelineRunner:
                     baseline = {k: v["means"] for k, v in baseline.items()}
             except Exception as e:
                 self.log(f"Нет baseline (run_0/final_info.json): {e}. Эксперименты невозможны.")
+                self._emit("experiments", "log",
+                           f"идея '{name}' пропущена: у шаблона '{self.template}' нет baseline"
+                           " run_0/final_info.json — сначала прогоните эксперименты или"
+                           " создайте проект через /skeleton",
+                           idea_id=name)
                 self.set_status(idea, "skipped", "no baseline results")
                 return
 
