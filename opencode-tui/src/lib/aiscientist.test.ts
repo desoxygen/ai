@@ -2,7 +2,7 @@
 import { existsSync, mkdtempSync, mkdirSync, appendFileSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createStore, deleteJobRecord, jobStageMap, markJobStatus, parseJsonl, pidAlive, readEvents, readJobs, runArgs, skeletonArgs, type AisEvent, type AisJob } from "./aiscientist.ts"
+import { askArgs, createStore, deleteJobRecord, jobStageMap, markJobStatus, parseJsonl, pidAlive, readEvents, readJobs, runArgs, skeletonArgs, type AisEvent, type AisJob } from "./aiscientist.ts"
 import { sortPanels, type DashPanel } from "../components/Dashboard.tsx"
 
 const dir = mkdtempSync(join(tmpdir(), "ais-broker-"))
@@ -137,4 +137,11 @@ afterAll(() => {
   try {
     rmSync(dir, { recursive: true, force: true })
   } catch {}
+})
+
+test("askArgs builds the headless research-ask command", () => {
+  expect(askArgs({ task: "сравни lr" })).toEqual([
+    "-m", "ai_scientist.console.cli", "-q", "ask", "сравни lr",
+  ])
+  expect(askArgs({ task: "x", model: "m", maxSteps: 3 })).toContain("--max-steps")
 })

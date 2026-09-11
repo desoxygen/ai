@@ -106,6 +106,8 @@ docker compose build && docker compose run --rm scientist
 ## Commands worth knowing
 
 ```text
+/ask <цель исследования>     # the MODEL calls the pipeline tools itself — the main entry
+                             # e.g.: /ask сравни cosine и step lr на playground и собери статью
 /run nanoGPT_lite            # pipeline — every stage lands on the Dashboard
 /paper                       # build the article: writeup → review (workspace 7)
 /improve 6:2                 # repair loop: min score 6, up to 2 rounds
@@ -114,6 +116,15 @@ docker compose build && docker compose run --rm scientist
 /report 3                    # markdown digest of a finished job → results/reports/
 /doctor                      # API key, LaTeX, aider, model roles — before burning credits
 ```
+
+`/ask` turns commands into **model tools**: the research director gets the
+pipeline's own module manifests as an OpenAI function-calling schema
+(`run_pipeline`, `write_paper`, `skeleton_project`, `last_report`, `doctor`),
+picks what the goal needs, and every tool call runs as a normal guarded job
+(the Dashboard, single-flight and stage guards apply). Native `tool_calls`
+and text-emitted calls (Ollama shims, hermes tags) both work. Delegated
+workers now get a **forged role** for the task (`ablation_statistician`,
+not `assistant`) via a one-shot staffing prompt.
 
 ## Configuration
 

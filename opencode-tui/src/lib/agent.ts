@@ -30,7 +30,9 @@ const SYSTEM =
   "Rules:\n" +
   "- Answer in the user's language. Be concise and concrete; use markdown code blocks for code and cite sources as path:line.\n" +
   "- Prefer the smallest correct change. When suggesting an experiment edit, name the file and the exact lines.\n" +
-  "- Long pipeline runs are launched with /run <template> and watched on the Dashboard — never run them yourself.\n" +
+  "- Research actions are one sentence away: /ask <цель> makes the model itself call the pipeline tools " +
+  "(run_pipeline, write_paper, skeleton_project, last_report, doctor). Suggest /ask instead of teaching the " +
+  "user commands; never run long stages yourself.\n" +
   "- When a result looks too good or too bad, say so and suggest a sanity check before celebrating.\n" +
   "- Surface trade-offs (compute cost vs signal, novelty vs feasibility) rather than picking silently for the user."
 
@@ -48,6 +50,45 @@ const ADVISOR_SYSTEM =
 const PLAN_ASK =
   "The user wants a task done. First reply ONLY with a numbered plan of 3-5 short imperative steps " +
   "(one step per line, no prose before or after). Do not execute anything yet."
+
+export interface ForgedRole {
+  role: string
+  brief: string
+}
+
+const ROLE_FORGE_SYSTEM =
+  "You are the staffing desk of a research lab. Given a task, invent the SINGLE best background " +
+  "worker persona to execute it (e.g. ablation_statistician, lr_schedule_scout, latex_critic). " +
+  "Reply EXACTLY two lines, no prose:\n" +
+  "ROLE: <snake_case role name, max 26 chars>\n" +
+  "BRIEF: <2-3 imperative sentences of operating instructions specific to this task>"
+
+/** Forge a per-task agent persona instead of a generic "assistant".
+ *  Falls back silently when no LLM is configured (offline tests, no key). */
+export async function forgeRole(
+  task: string,
+  model: string,
+  signal?: AbortSignal,
+  hint = "",
+): Promise<ForgedRole> {
+  if (!llmReady()) return { role: "assistant", brief: "" }
+  try {
+    const out = await chatComplete({
+      model,
+      messages: [
+        { role: "system", content: ROLE_FORGE_SYSTEM },
+        { role: "user", content: hint ? `Task: ${task}\n${hint}` : `Task: ${task}` },
+      ],
+      signal,
+    })
+    const role = /ROLE:\s*([a-z0-9_]{2,26})/i.exec(out)?.[1]?.toLowerCase() ?? ""
+    const brief = /BRIEF:\s*(.+)/i.exec(out)?.[1]?.trim().slice(0, 500) ?? ""
+    if (!role) return { role: "assistant", brief: "" }
+    return { role, brief }
+  } catch {
+    return { role: "assistant", brief: "" }
+  }
+}
 
 function parsePlan(text: string): string[] {
   return text

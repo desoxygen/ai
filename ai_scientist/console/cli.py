@@ -110,6 +110,39 @@ def cli_run(argv):
     return execute_job(mod, options, jobs, printer=_print_event)
 
 
+def cli_ask(argv):
+    """aiscientist -q ask "goal" — the model itself calls the pipeline tools."""
+    import argparse
+    from ai_scientist.console import assistant
+
+    p = argparse.ArgumentParser(prog="aiscientist ask")
+    p.add_argument("task", nargs="?", default="", help="research goal in plain language")
+    p.add_argument("--task", dest="task_kw", default="", help=argparse.SUPPRESS)
+    p.add_argument("--model", default="", help=_t("cli_model_help"))
+    p.add_argument("--max-steps", type=int, default=8)
+    a = p.parse_args(argv)
+    task = (a.task or a.task_kw).strip()
+    if not task:
+        print(_t("cli_ask_no_task"), file=sys.stderr)
+        return 2
+
+    def printer(ev):
+        print(format_event(ev))
+
+    try:
+        out = assistant.ask(task, model=a.model, max_steps=a.max_steps,
+                            emit=lambda stage, status, msg, **kw: printer(
+                                {"stage": stage, "status": status, "message": msg}),
+                            printer=printer)
+    except Exception as e:
+        print(f"[-] [ask] {e}", file=sys.stderr)
+        return 1
+    if out.get("answer"):
+        print()
+        print(out["answer"])
+    return 0 if out.get("ok") else 1
+
+
 def cli_skeleton(argv):
     import argparse
     from ai_scientist.console.jobs import JobRegistry
@@ -276,6 +309,7 @@ def main(argv=None) -> int:
         print("  aiscientist --version  print version")
         print()
         print("Headless/debug (used by the TUI and CI, not an interactive UI):")
+        print('  aiscientist -q ask "<research goal>"   # the model calls the pipeline tools itself')
         print("  aiscientist -q run --template T [--stages ...] [--improve ...]")
         print("  aiscientist -q skeleton --name N --description D")
         print("  aiscientist -q paper --template T [--folder F] [--improve ...]")
@@ -294,6 +328,8 @@ def main(argv=None) -> int:
 
     if cmd == "run":
         return cli_run(rest)
+    if cmd == "ask":
+        return cli_ask(rest)
     if cmd in ("skeleton", "generate-skeleton"):
         return cli_skeleton(rest)
     if cmd == "paper":

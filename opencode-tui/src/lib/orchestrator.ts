@@ -47,6 +47,8 @@ export interface Orchestrator {
   appendTaskLog(id: number, text: string): void
   /** Operator steering: record a clarification against a live task. */
   steer(id: number, clarification: string): Worker | null
+  /** Role-forge: rename a freshly spawned worker once its role is decided. */
+  rename(id: number, name: string): void
   setResult(id: number, text: string): void
   finishTask(id: number, status: "done" | "failed" | "killed"): void
   kill(id: number): Worker | null
@@ -331,6 +333,16 @@ export function createOrchestrator(opts?: { now?: () => number }): Orchestrator 
       dirty = true
       notify()
       return w
+    },
+    rename(id, name) {
+      const w = workers.get(id)
+      if (!w) return
+      const clean = name.trim().replace(/\s+/g, "_").slice(0, 26)
+      if (!clean || w.name === clean) return
+      w.name = clean
+      log(`worker #${id} role → ${clean}`)
+      dirty = true
+      notify()
     },
     setResult(id: number, text: string) {
       const w = workers.get(id)

@@ -12,11 +12,16 @@
 
 ## Как гонять
 
+Одна фраза вместо команд — модель сама вызывает инструменты пайплайна:
+
 ```
-/run playground              # весь цикл: ideas → novelty → experiments → writeup → review
-/improve 6:2                 # цикл починки статьи по рецензии
-python experiment.py --out_dir run_test && python check_run.py run_test
+/ask сравни learning rates на playground и собери статью с рецензией
 ```
+
+Под капотом `research_director` дёргает тулзы `run_pipeline → write_paper`
+(каждый вызов — обычный job, виден на Dashboard со всеми guard'ами).
+Команды (`/run`, `/paper`, `/improve 6:2`) остались, но это debug-обвязка:
+ normally достаточно `/ask` и меню.
 
 Идея-затравка (`seed_ideas.json`): добавить квадратичный признак, чтобы
 линейная модель «разогнула» геометрию данных — ожидаемое улучшение test_acc.

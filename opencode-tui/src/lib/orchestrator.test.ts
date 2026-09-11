@@ -107,3 +107,14 @@ test("no simulated routine workers ever appear", () => {
   o.dispose()
   rmSync(isolated, { recursive: true, force: true })
 })
+
+test("rename assigns a forged role to a live worker", () => {
+  t = 1000
+  const o = createOrchestrator({ now: clock })
+  const id = o.beginTask("compare lr schedules")
+  expect(o.state(null).workers.find((w) => w.id === id)?.name).toBe("assistant")
+  o.rename(id, "ablation_statistician")
+  expect(o.state(null).workers.find((w) => w.id === id)?.name).toBe("ablation_statistician")
+  o.rename(id, "   ")
+  expect(o.state(null).workers.find((w) => w.id === id)?.name).toBe("ablation_statistician")
+})

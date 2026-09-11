@@ -444,6 +444,52 @@ export function startPaper(opts: PaperOptions): RunHandle {
   return { child, stop: () => killTree(child) }
 }
 
+export function askArgs(opts: { task: string; model?: string; maxSteps?: number }): string[] {
+  return [
+    "-m",
+    "ai_scientist.console.cli",
+    "-q",
+    "ask",
+    opts.task,
+    ...(opts.model ? ["--model", opts.model] : []),
+    ...(opts.maxSteps ? ["--max-steps", String(opts.maxSteps)] : []),
+  ]
+}
+
+/** Start `aiscientist -q ask "<goal>"` and stream every runner event line
+ *  (tool calls, stage logs, final answer) through onLine. Resolves on exit. */
+export function startAsk(
+  opts: { task: string; model?: string; maxSteps?: number },
+  onLine: (line: string) => void,
+): RunHandle & { done: Promise<number> } {
+  const child = spawn(process.env.AISC_PYTHON || "python", askArgs(opts), {
+    cwd: PROJECT_ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  })
+  let buf = ""
+  child.stdout?.setEncoding("utf8")
+  child.stdout?.on("data", (chunk: string) => {
+    buf += chunk
+    const lines = buf.split("\n")
+    buf = lines.pop() ?? ""
+    for (const ln of lines) if (ln.trim()) onLine(ln.replace(/\r$/, ""))
+  })
+  let errBuf = ""
+  child.stderr?.setEncoding("utf8")
+  child.stderr?.on("data", (chunk: string) => {
+    errBuf += chunk
+  })
+  const done = new Promise<number>((res) => {
+    child.on("close", (code) => {
+      if (buf.trim()) onLine(buf.trim())
+      if (code !== 0 && errBuf.trim()) onLine(errBuf.trim().slice(-500))
+      res(code ?? -1)
+    })
+  })
+  return { child, stop: () => killTree(child), done }
+}
+
 export function waitJobId(prevMax: number, timeoutMs = 20000): Promise<number> {
   return new Promise((res) => {
     const iv = setInterval(() => {

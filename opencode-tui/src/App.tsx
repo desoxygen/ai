@@ -21,8 +21,8 @@ import { articleFor } from "./lib/articles.ts"
 import { Explorer } from "./components/Explorer.tsx"
 import { NotesBoard, type NotePrompt } from "./components/NotesBoard.tsx"
 import { AgentsWorkspace } from "./components/AgentsWorkspace.tsx"
-import { createResponse, type AgentEvent } from "./lib/agent.ts"
-import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startRun as startAisRun, startSkeleton as startAisSkeleton, startPaper as startAisPaper, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
+import { createResponse, forgeRole, type AgentEvent } from "./lib/agent.ts"
+import { createStore, jobElapsed, jobStageMap, listTemplates, readEvents, startAsk, startRun as startAisRun, startSkeleton as startAisSkeleton, startPaper as startAisPaper, waitJobId, killTree, killPid, pidAlive, markJobStatus, deleteJobRecord, PROJECT_ROOT, eventsPath, type AisEvent, type AisStore, type RunHandle } from "./lib/aiscientist.ts"
 import { latestPaperJob, paperProgress } from "./lib/paper.ts"
 import { apiKey, chatComplete, llmBlockedReason, llmReady, resolveModel, pipelineModel, streamChat, cachedModels, fetchModels, activeRouterId, hasEnv, routerLabel, setActiveRouter, pipelineModelStatus, configuredPipelineModel, ROUTERS, type ChatMsg } from "./lib/llm.ts"
 import { createProject, validateName, type NewProjectInput } from "./lib/newproject.ts"
@@ -172,6 +172,7 @@ const SLASH: SlashItem[] = [
   { name: "/new-project", desc: "create a new research project (wizard)" },
   { name: "/routers", desc: "switch LLM router (OpenRouter, Anthropic, OpenAI, …)" },
   { name: "/delegate", desc: "give the main agent a task (/delegate <task>)" },
+  { name: "/ask", desc: "state a research goal — the model runs the pipeline tools itself" },
   { name: "/jobs", desc: "jump to an experiment" },
   { name: "/article", desc: "open the project's real document (paper.md / README.md, fullscreen)" },
   { name: "/report", desc: "export a job report to markdown (/report [jobId])" },
@@ -930,10 +931,10 @@ export function App() {
       o.appendTaskLog(wid, `model ${resolveModel(ALL_MODELS[modelIndex].id)} · streaming…`)
       let acc = ""
       let pendingLine = ""
-      const sys =
+      const baseSys =
         "You are a background worker of the AI-Scientist TUI main agent. Complete the task honestly and concisely; " +
         "if you cannot do something for real, say so. Answer in the language of the task."
-      const run = async () => {
+      const run = async (sys: string) => {
         for await (const chunk of streamChat({ model: ALL_MODELS[modelIndex].id, messages: [{ role: "system", content: sys }, { role: "user", content: full }], variant: activeVariant(), signal: abort.signal, onUsage: accumulateUsage })) {
           acc += chunk
           pendingLine += chunk
@@ -943,7 +944,22 @@ export function App() {
         }
         if (pendingLine.trim()) o.appendTaskLog(wid, pendingLine)
       }
-      run()
+      // Role-forge: give this task a real persona instead of a nameless
+      // "assistant" (docs/BETA0.1.md — agents built for the task, not menus).
+      // Steer reuses the role already forged for the worker.
+      const roleP: Promise<{ role: string; brief: string }> =
+        steerTo && prev && prev.name !== "assistant"
+          ? Promise.resolve({ role: prev.name, brief: "" })
+          : forgeRole(full, ALL_MODELS[modelIndex].id, abort.signal)
+      roleP
+        .then(({ role, brief }) => {
+          if (abort.signal.aborted) return
+          if (role !== "assistant") {
+            o.rename(wid, role)
+            o.appendTaskLog(wid, `role forged: ${role}${brief ? ` — ${brief.slice(0, 90)}` : ""}`)
+          }
+          return run(baseSys + (brief ? `\nYour persona for this task: ${role}. ${brief}` : ""))
+        })
         .then(() => {
           if (abort.signal.aborted) return
           o.setResult(wid, acc)
@@ -965,6 +981,43 @@ export function App() {
         })
     },
     [activeVariant, modelIndex, pushStatic, showToast],
+  )
+
+  /** /ask — one sentence in, the MODEL calls pipeline tools itself.
+   *  The headless assistant streams every tool event; child jobs appear on
+   *  the Dashboard via jobs.jsonl as usual (same guards, same journal). */
+  const researchAsk = useCallback(
+    (task: string) => {
+      const o = orchRef.current
+      if (!o) return
+      const wid = o.beginTask(`ask: ${task}`)
+      o.rename(wid, "research_director")
+      const answerLines: string[] = []
+      const ctl = startAsk({ task }, (line) => {
+        // event lines look like "[*] [stage] msg"; everything else is the
+        // model's final answer
+        if (/^\[[*+\- ]\] \[/.test(line)) {
+          if (/^\[\*\] \[ask\] tool/.test(line)) showToast(line.slice(0, 72), "info")
+        } else {
+          answerLines.push(line)
+        }
+        o.appendTaskLog(wid, line)
+      })
+      taskCtlRef.current.set(wid, { abort: () => ctl.stop() } as unknown as AbortController)
+      void ctl.done.then((code) => {
+        if (taskCtlRef.current.get(wid)) taskCtlRef.current.delete(wid)
+        const answer = answerLines.join("\n").trim()
+        if (answer) o.setResult(wid, answer)
+        o.finishTask(wid, code === 0 ? "done" : "failed")
+        notifyOS("AI-Scientist", code === 0 ? "research task done" : "research task failed")
+        pushStatic(
+          answer
+            ? `Research task «${task.slice(0, 60)}» — done:\n\n${answer}`
+            : `Research task «${task.slice(0, 60)}» finished with exit ${code} — see the Agents board (#${wid}).`,
+          "delegate", true)
+      })
+    },
+    [pushStatic, showToast],
   )
 
   const steerWorker = useCallback(
@@ -2016,6 +2069,16 @@ export function App() {
             pushStatic(`Main agent accepted «${task}» and spawned a real worker — follow it on tab 5 (Agents); the result will be posted to chat.\n`, "delegate")
           } else {
             pushStatic("usage: /delegate <task> — the main agent runs the task with the model (Agents board · tab 5)\n", "help")
+          }
+          return true
+        }
+        case "ask": {
+          const task = cmd.slice(cmd.indexOf(" ") + 1).trim()
+          if (task && !/^--?\w*$/.test(task)) {
+            researchAsk(task)
+            pushStatic(`Research director is on it: «${task}» — it will pick the pipeline tools itself (Dashboard follows every stage, tab 5 shows the worker).\n`, "delegate")
+          } else {
+            pushStatic('usage: /ask <цель исследования> — example: /ask сравни cosine и step lr на grokking_toy и собери статью\n', "help")
           }
           return true
         }

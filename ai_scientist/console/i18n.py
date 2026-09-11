@@ -37,6 +37,10 @@ _translations = {
         "en": 'aiscientist: unknown command `%s`. Type `help`.',
         "ru": 'aiscientist: неизвестная команда `%s`. Наберите `help`.',
     },
+    "cli_ask_no_task": {
+        "en": 'usage: aiscientist -q ask "<research goal>"',
+        "ru": 'использование: aiscientist -q ask "<цель исследования>"',
+    },
     "cli_interrupted": {
         "en": '\nInterrupted.',
         "ru": '\nПрервано.',
